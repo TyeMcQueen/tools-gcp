@@ -144,6 +144,19 @@ func (m Client) tsListLatest(
 }
 
 
+func MetricKind(md *monitoring.MetricDescriptor) string {
+	kind := "other"
+	if "DISTRIBUTION" == md.ValueType {
+		kind = "histogram"
+	} else if "GAUGE" == md.MetricKind {
+		kind = "gauge"
+	} else {
+		kind = "counter"
+	}
+	return kind
+}
+
+
 func (m Client) GetLatestTimeSeries(
 	ctx         context.Context,
 	ch          chan<- *monitoring.TimeSeries,
@@ -165,7 +178,11 @@ func (m Client) GetLatestTimeSeries(
 	).Filter(
 		fmt.Sprintf(`metric.type="%s"`, md.Type),
 	)
-	for {
+	delta := tDelta("DELTA" == md.MetricKind)
+	kind := MetricKind(md)
+	first, last := isFirst, !isLast
+	for !last {
+		start := time.Now()
 		page, err := lister.Do()
 		if err != nil {
 			if 400 != conn.ErrorCode(err) ||
@@ -173,9 +190,13 @@ func (m Client) GetLatestTimeSeries(
 				lager.Fail().Map("Error getting page of Time Series", err,
 					"Code", conn.ErrorCode(err), "Metric", md.Type)
 			}
+			go tsPageSecs(start, projectID, delta, kind, first, isLast, err)
 			return
 		}
+		last = tLast(nil == page || "" == page.NextPageToken)
+		go tsPageSecs(start, projectID, delta, kind, first, last, nil)
 		if nil != page {
+			go tsCountAdd(len(page.TimeSeries), projectID, delta, kind)
 			for _, timeSeries := range page.TimeSeries {
 				select {
 				case <- canceled:
@@ -183,9 +204,6 @@ func (m Client) GetLatestTimeSeries(
 				case ch <- timeSeries:
 				}
 			}
-		}
-		if nil == page || "" == page.NextPageToken {
-			break
 		}
 	}
 }
@@ -219,12 +237,19 @@ func (m Client) GetMetricDescs(
 			fmt.Sprintf(`metric.type = starts_with("%s")`, prefix),
 		)
 	}
-	for {
+	first := isFirst
+	last := !isLast
+	for !last {
+		start := time.Now()
 		page, err := lister.Do()
 		if err != nil {
+			go mdPageSecs(start, projectID, first, isLast, err)
 			lager.Fail().Map("Error getting page of Metric Descs", err)
 			return
 		}
+		last = tLast(nil == page || "" == page.NextPageToken)
+		go mdPageSecs(start, projectID, first, last, nil)
+		first = !isFirst
 		if nil != page {
 			for _, md := range page.MetricDescriptors {
 				select {
@@ -233,9 +258,6 @@ func (m Client) GetMetricDescs(
 				case ch <- md:
 				}
 			}
-		}
-		if page == nil || "" == page.NextPageToken {
-			break
 		}
 	}
 }
