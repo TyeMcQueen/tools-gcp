@@ -24,6 +24,8 @@ var AsJson = pflag.BoolP("json", "j", false,
 	"Dump the full JSON of each metric descriptor.")
 var WithHelp = pflag.BoolP("help", "h", false,
 	"Show each metric's text description.")
+var WithBuckets = pflag.BoolP("buckets", "b", false,
+	"Show bucket information about any histogram metrics.")
 var Depth = pflag.IntP("depth", "d", 0,
 	"Group metrics by the first 1, 2, or up-to 3 parts of the metric path.")
 
@@ -45,7 +47,7 @@ func DumpJson(indent string, ix interface{}) {
 
 func usage() {
 	fmt.Println(Join("\n",
-	"nmt-stats [-qejh] [-d=...] [project-id]",
+	"nmt-stats [-qejhb] [-d=...] [project-id]",
 	"  By default, shows which StackDriver metrics are not empty.",
 	"  Every option can be abbreviated to its first letter.",
 	"  -?           Show this usage information.",
@@ -54,9 +56,11 @@ func usage() {
 	"  --empty      Show all metrics, not just non-empty ones.",
 	"  --json       Dump the full JSON of each metric descriptor.",
 	"  --help       Show each metric's text description.",
+	"  --buckets    Show bucket information about any histogram metrics.",
+	"               Ignored if -d, -e, or -j given.",
 	"  --depth=1-3  Only show groups of metrics.  -d1 just shows service/.",
 	"               -d2 shows service/object/.  -d3 can show svc/obj/sub/.",
-	"               -d causes -j and -h to be ignored.",
+	"               -d causes -j, -h, and -b to be ignored.",
 	"  Output is usually: Count KindType Path Units Delay+Period",
 	"    Count  Number of distinct label combinations (unless -e given).",
 	"    Kind   MetricKind: D, C, or G (delta, cumulative, gauge).",
@@ -83,12 +87,31 @@ func MetricPrefix(mdPath string, depth int) string {
 }
 
 
+func BucketInfo(
+	tsValue *monitoring.TypedValue,
+) (bucketType string, buckets interface{}) {
+	bo := tsValue.DistributionValue.BucketOptions
+	if nil != bo.ExplicitBuckets {
+		buckets = bo.ExplicitBuckets
+	} else if nil != bo.ExponentialBuckets {
+		bucketType = "Geometric"
+		buckets = bo.ExponentialBuckets
+	} else if nil != bo.LinearBuckets {
+		bucketType = "Linear"
+		buckets = bo.LinearBuckets
+	}
+	return
+}
+
+
 func DescribeMetric(
 	count   int,
 	md      *monitoring.MetricDescriptor,
 	k       byte,
 	t       byte,
 	u       string,
+	bType   string,
+	buckets interface{},
 	eol     string,
 ) {
 	if *AlsoEmpty {
@@ -102,6 +125,10 @@ func DescribeMetric(
 			mon.SamplePeriod(md)/time.Second, eol)
 	}
 	if *AlsoEmpty || 0 < count {
+		if *WithBuckets && nil != buckets {
+			fmt.Printf("    %s", bType)
+			DumpJson("", buckets)
+		}
 		if *WithHelp {
 			fmt.Printf("    %s\n", md.Description)
 		}
@@ -135,9 +162,13 @@ func ShowMetric(
 		count = 0
 	}
 
+	bucketType, buckets := "", interface{}(nil)
 	if !*AlsoEmpty {
-		for _ = range client.StreamLatestTimeSeries(nil, proj, md, 5, "8h") {
+		for ts := range client.StreamLatestTimeSeries(nil, proj, md, 5, "8h") {
 			count++
+			if 1 == count && 'H' == t && *Depth < 1 {
+				bucketType, buckets = BucketInfo(ts.Points[0].Value)
+			}
 		}
 	}
 
@@ -148,7 +179,7 @@ func ShowMetric(
 	} else if *AsJson {
 		DumpJson("  ", md)
 	} else {
-		DescribeMetric(count, md, k, t, u, eol)
+		DescribeMetric(count, md, k, t, u, bucketType, buckets, eol)
 	}
 	return count, prefix
 }
