@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -19,6 +20,10 @@ var Quiet = pflag.BoolP("quiet", "q", false,
 	"Don't show empty metrics names while working.")
 var AlsoEmpty = pflag.BoolP("empty", "e", false,
 	"Show all metrics, not just non-empty ones.")
+var AsJson = pflag.BoolP("json", "j", false,
+	"Dump the full JSON of each metric descriptor.")
+var WithHelp = pflag.BoolP("help", "h", false,
+	"Show each metric's text description.")
 var Depth = pflag.IntP("depth", "d", 0,
 	"Group metrics by the first 1, 2, or up-to 3 parts of the metric path.")
 
@@ -26,17 +31,32 @@ var Depth = pflag.IntP("depth", "d", 0,
 func Join(sep string, strs ...string) string { return strings.Join(strs, sep) }
 
 
+func DumpJson(indent string, ix interface{}) {
+	j := json.NewEncoder(os.Stdout)
+	if "" != indent {
+		j.SetIndent("", indent)
+	}
+	err := j.Encode(ix)
+	if err != nil {
+		fmt.Printf("Unable to marshal to JSON: %v\n", err)
+	}
+}
+
+
 func usage() {
 	fmt.Println(Join("\n",
-	"nmt-stats [-qe] [-d=...] [project-id]",
+	"nmt-stats [-qejh] [-d=...] [project-id]",
 	"  By default, shows which StackDriver metrics are not empty.",
 	"  Every option can be abbreviated to its first letter.",
 	"  -?           Show this usage information.",
 	"  --quiet      Don't show names of empty metrics while searching.",
-	"               Implied if -e given.",
+	"               Implied if -e or -j given.",
 	"  --empty      Show all metrics, not just non-empty ones.",
+	"  --json       Dump the full JSON of each metric descriptor.",
+	"  --help       Show each metric's text description.",
 	"  --depth=1-3  Only show groups of metrics.  -d1 just shows service/.",
 	"               -d2 shows service/object/.  -d3 can show svc/obj/sub/.",
+	"               -d causes -j and -h to be ignored.",
 	"  Output is usually: Count KindType Path Units Delay+Period",
 	"    Count  Number of distinct label combinations (unless -e given).",
 	"    Kind   MetricKind: D, C, or G (delta, cumulative, gauge).",
@@ -81,6 +101,11 @@ func DescribeMetric(
 			mon.IngestDelay(md)/time.Second,
 			mon.SamplePeriod(md)/time.Second, eol)
 	}
+	if *AlsoEmpty || 0 < count {
+		if *WithHelp {
+			fmt.Printf("    %s\n", md.Description)
+		}
+	}
 }
 
 
@@ -120,6 +145,8 @@ func ShowMetric(
 		if *AlsoEmpty || 0 < count {
 			fmt.Printf("%s%s\n", prefix, eol)
 		}
+	} else if *AsJson {
+		DumpJson("  ", md)
 	} else {
 		DescribeMetric(count, md, k, t, u, eol)
 	}
@@ -133,6 +160,9 @@ func main() {
 		usage()
 	}
 	eol := " \x1b[K"
+	if *AsJson {
+		*Quiet = true
+	}
 	if *AlsoEmpty || *Quiet {
 		eol = ""
 	}
