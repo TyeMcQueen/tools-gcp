@@ -18,6 +18,8 @@ type Client struct {
 	*monitoring.Service
 }
 
+const QuotaExceeded = 429
+
 
 func AsDuration(str string) time.Duration {
 	dur, err := time.ParseDuration(str)
@@ -184,6 +186,11 @@ func (m Client) GetLatestTimeSeries(
 	for !last {
 		start := time.Now()
 		page, err := lister.Do()
+		for nil != err && QuotaExceeded == conn.ErrorCode(err) {
+			lager.Warn().List("Sleeping due to quota exhaustion")
+			time.Sleep(20*time.Second)
+			page, err = lister.Do()
+		}
 		if err != nil {
 			if 400 != conn.ErrorCode(err) ||
 			   !strings.Contains(err.Error(), "and monitored resource") {
@@ -242,6 +249,11 @@ func (m Client) GetMetricDescs(
 	for !last {
 		start := time.Now()
 		page, err := lister.Do()
+		for nil != err && QuotaExceeded == conn.ErrorCode(err) {
+			lager.Warn().List("Sleeping due to quota exhaustion")
+			time.Sleep(20*time.Second)
+			page, err = lister.Do()
+		}
 		if err != nil {
 			go mdPageSecs(start, projectID, first, isLast, err)
 			lager.Fail().Map("Error getting page of Metric Descs", err)
