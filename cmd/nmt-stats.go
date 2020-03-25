@@ -26,6 +26,8 @@ var WithHelp = pflag.BoolP("help", "h", false,
 	"Show each metric's text description.")
 var WithBuckets = pflag.BoolP("buckets", "b", false,
 	"Show bucket information about any histogram metrics.")
+var Prefix = pflag.StringP("metric", "m", "",
+	"Only show metrics that match the listed prefix(es) (comma-separated).")
 var Depth = pflag.IntP("depth", "d", 0,
 	"Group metrics by the first 1, 2, or up-to 3 parts of the metric path.")
 
@@ -47,7 +49,7 @@ func DumpJson(indent string, ix interface{}) {
 
 func usage() {
 	fmt.Println(Join("\n",
-	"nmt-stats [-qejhb] [-d=...] [project-id]",
+	"nmt-stats [-qejhb] [-[md]=...] [project-id]",
 	"  By default, shows which StackDriver metrics are not empty.",
 	"  Every option can be abbreviated to its first letter.",
 	"  -?           Show this usage information.",
@@ -58,6 +60,7 @@ func usage() {
 	"  --help       Show each metric's text description.",
 	"  --buckets    Show bucket information about any histogram metrics.",
 	"               Ignored if -d, -e, or -j given.",
+	"  --metric=PRE Only show metrics with these prefix(es), comma-separated.",
 	"  --depth=1-3  Only show groups of metrics.  -d1 just shows service/.",
 	"               -d2 shows service/object/.  -d3 can show svc/obj/sub/.",
 	"               -d causes -j, -h, and -b to be ignored.",
@@ -202,11 +205,17 @@ func main() {
 	if 0 < len(pflag.Args()) {
 		proj = pflag.Arg(0)
 	}
+	prefixes := strings.Split(*Prefix, ",")
+	if 0 == len(prefixes) {
+		prefixes = []string{""}
+	}
 
 	client := mon.MustMonitoringClient(nil)
 	count, prior := -1, ""
-	for md := range client.StreamMetricDescs(nil, proj, "") {
-		count, prior = ShowMetric(client, proj, md, count, prior, eol)
+	for _, search := range prefixes {
+		for md := range client.StreamMetricDescs(nil, proj, search) {
+			count, prior = ShowMetric(client, proj, md, count, prior, eol)
+		}
 	}
 	fmt.Print(eol)
 }
