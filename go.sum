@@ -5,6 +5,8 @@ cloud.google.com/go v0.38.0/go.mod h1:990N+gfupTy94rShfmMCWGDn0LpTmnzTp2qbd1dvSR
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/TyeMcQueen/go-lager v1.0.0 h1:Jy/592i/S7Ze3+rKDjAcFQAOM/62cLb3jpPpnu0N4sI=
 github.com/TyeMcQueen/go-lager v1.0.0/go.mod h1:f3qKaWxklJZDWFomN1JLnyO/AkOXrqhML60negx/wys=
+github.com/TyeMcQueen/go-tutl v0.0.0-20190204014423-dec7824b087c h1:yn3gnmIL1uMqqX7PC08bRbSE1VMMEiu5K2WI5i027/Y=
+github.com/TyeMcQueen/go-tutl v0.0.0-20190204014423-dec7824b087c/go.mod h1:nW7zRt1PqznqPaES2UHtn9LjHis4KQG58b1MAlB+SWA=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=

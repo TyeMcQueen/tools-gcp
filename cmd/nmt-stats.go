@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/TyeMcQueen/go-tutl"
 	"github.com/TyeMcQueen/tools-gcp/mon"
 	"github.com/TyeMcQueen/tools-gcp/conn"
 	"google.golang.org/api/monitoring/v3"
@@ -210,6 +211,9 @@ func ShowMetric(
 
 
 func main() {
+	if "" != os.Getenv("PANIC_ON_INT") {
+		go tutl.ShowStackOnInterrupt()
+	}
 	pflag.Parse()
 	if 1 < len(pflag.Args()) || *Usage {
 		usage()
