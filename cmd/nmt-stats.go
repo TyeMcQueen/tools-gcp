@@ -26,6 +26,12 @@ var WithHelp = pflag.BoolP("help", "h", false,
 	"Show each metric's text description.")
 var WithBuckets = pflag.BoolP("buckets", "b", false,
 	"Show bucket information about any histogram metrics.")
+var OnlyUnits = pflag.StringP("unit", "u", "",
+	"Only show metrics with matching units.")
+var OnlyTypes = pflag.StringP("only", "o", "",
+	"Only show metrics using any of the listed types (from CDGHFIBS).")
+var NotTypes = pflag.StringP("not", "n", "",
+	"Exclude metrics using any of the listed types (from CDGHFIBS).")
 var Prefix = pflag.StringP("metric", "m", "",
 	"Only show metrics that match the listed prefix(es) (comma-separated).")
 var Depth = pflag.IntP("depth", "d", 0,
@@ -49,7 +55,7 @@ func DumpJson(indent string, ix interface{}) {
 
 func usage() {
 	fmt.Println(Join("\n",
-	"nmt-stats [-qejhb] [-[md]=...] [project-id]",
+	"nmt-stats [-qejhb] [-[mudon]=...] [project-id]",
 	"  By default, shows which StackDriver metrics are not empty.",
 	"  Every option can be abbreviated to its first letter.",
 	"  -?           Show this usage information.",
@@ -61,9 +67,13 @@ func usage() {
 	"  --buckets    Show bucket information about any histogram metrics.",
 	"               Ignored if -d, -e, or -j given.",
 	"  --metric=PRE Only show metrics with these prefix(es), comma-separated.",
+	"  --unit=ms    Only show metrics with matching units.",
 	"  --depth=1-3  Only show groups of metrics.  -d1 just shows service/.",
 	"               -d2 shows service/object/.  -d3 can show svc/obj/sub/.",
 	"               -d causes -j, -h, and -b to be ignored.",
+	"  --{only|not}=[CDGHFIBS]",
+	"      Only show (or exclude) metrics using any of the following types:",
+	"          Cumulative Delta Gauge Histogram Float Int Bool String",
 	"  Output is usually: Count KindType Path Units Delay+Period",
 	"    Count  Number of distinct label combinations (unless -e given).",
 	"    Kind   MetricKind: D, C, or G (delta, cumulative, gauge).",
@@ -75,6 +85,12 @@ func usage() {
 	"    Period Number of seconds in each sample period.",
 	))
 	os.Exit(1)
+}
+
+
+func Contains(set string, k, t byte) bool {
+	any := string([]byte{k,t})
+	return strings.ContainsAny(set, any)
 }
 
 
@@ -152,6 +168,11 @@ func ShowMetric(
 		return count, prior
 	}
 	k, t, u := mon.MetricAbbrs(md)
+	if "" != *OnlyUnits && u != *OnlyUnits ||
+	   "" != *OnlyTypes && !Contains(*OnlyTypes, k, t) ||
+	   "" != *NotTypes && Contains(*NotTypes, k, t) {
+		return count, prior
+	}
 
 	if !*AlsoEmpty {
 		if 0 == count && prior == prefix {
@@ -193,6 +214,8 @@ func main() {
 	if 1 < len(pflag.Args()) || *Usage {
 		usage()
 	}
+	*OnlyTypes = strings.ToUpper(*OnlyTypes)
+	*NotTypes = strings.ToUpper(*NotTypes)
 	eol := " \x1b[K"
 	if *AsJson {
 		*Quiet = true
