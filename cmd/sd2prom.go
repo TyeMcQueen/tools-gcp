@@ -2,8 +2,10 @@ package main
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/TyeMcQueen/go-lager"
+	"github.com/TyeMcQueen/go-tutl"
 	"github.com/TyeMcQueen/tools-gcp/conn"
 	"github.com/TyeMcQueen/tools-gcp/mon"
 	"github.com/TyeMcQueen/tools-gcp/mon2prom"
@@ -12,6 +14,9 @@ import (
 
 
 func main() {
+	if "" != os.Getenv("PANIC_ON_INT") {
+		go tutl.ShowStackOnInterrupt()
+	}
 	monClient := mon.MustMonitoringClient(nil)
 	proj := conn.DefaultProjectId()
 	ch, runner := mon2prom.MetricFetcher(monClient)
