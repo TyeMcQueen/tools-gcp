@@ -61,7 +61,7 @@ func divide(d float64) ScalingFunc {
 
 
 func init() {
-	r, err := os.Open("config.yaml")
+	r, err := os.Open("sdconfig.yaml")
 	if nil != err {
 		lager.Exit().Map("Can't read config.yaml", err)
 	}
