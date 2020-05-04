@@ -1,0 +1,58 @@
+---
+system:       gcp
+units:
+  "10^2.%":   /100
+  "%":        /100
+  GBy.s:      "*1024*1024*1024"
+  GiBy:       "*1024*1024*1024"
+  GiBy.s:     "*1024*1024*1024"
+  MiBy:       "*1024*1024"
+  d:          "*60*60*24"
+  ms:         /1000
+  us:         /1000/1000
+  ns:         /1000/1000/1000
+subsystem:
+  loadbalancing.googleapis.com/https/:          lb_https
+  loadbalancing.googleapis.com/https/internal/: ilb_https
+  loadbalancing.googleapis.com/l3/external/:    lb_l3
+  loadbalancing.googleapis.com/l3/internal/:    ilb_l3
+  loadbalancing.googleapis.com/tcp_ssl_proxy/:  tcp_ssl_proxy
+  bigquery.googleapis.com/query/:               bigquery_query
+  bigquery.googleapis.com/slots/:               bigquery_slot
+  bigquery.googleapis.com/storage/:             bigquery_store
+suffix:
+  any:
+    /total_latencies:         /combined_latencies
+    /open_connections:        /current_connections
+    /port_usage:              /ports_used_count
+    /bytes_ingested:          /ingested_bytes
+    /monthly_bytes_ingested:  /month_to_date_ingested_bytes
+    /max_rate:                /max_requests_per_second
+    /max_utilization:         /max_utilization_ratio
+    /utilization:             /utilization_ratio
+    /nat_allocation_failed:   /nat_allocation_failed_bytes
+    /uploaded_bytes_billed:   /billed_uploaded_bytes
+  histogram:
+    _latencies:       _latency_seconds
+    rtt:              rtt_seconds
+  counter:
+    s_count:          s_total
+    row_count:        rows_total
+    entry_count:      entries_total
+    byte_count:       bytes_total
+    request_count:    requests_total
+    _connections:     _connections_total
+  gauge:
+    instance_group/size:  instance_count
+    allocation/usage:     quota_usage
+maxBuckets: 32
+histogram:
+  s,ms,ns,us:
+    minbound: 0.01
+    minratio: 1.9
+    maxbound: 500
+badlabels:
+  - labels: [proxy_continent, client_country]
+    prefix: loadbal
+    only: H
+    unit: ms
