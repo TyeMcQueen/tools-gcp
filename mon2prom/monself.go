@@ -14,12 +14,6 @@ var promCount = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 	Namespace: "gcp",  Subsystem: "to_prom",  Name: "values_total",
 	Help: "How many unique label sets being exported to Prometheus",
 },  []string{"project_id", "metric", "delta", "kind"})
-/*
-var ? = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Namespace: "gcp",  Subsystem: "to_prom",  Name: "sample_delays_total",
-	Help: "How many times the most recent sample period for a StackDrive TimeSeries was empty.",
-},  []string{"project_id", "metric", "delta", "kind"})
-*/
 
 func init() {
 	prometheus.MustRegister(promCount)
