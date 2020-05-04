@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -124,6 +125,30 @@ func BucketInfo(
 }
 
 
+var wideLine = regexp.MustCompile(`(?m)^[^\n]{1,74}( )[^\n]*`)
+
+// WrapText() returns the passed-in string but with any lines longer than
+// 74 bytes wrapped by replacing a space with a newline followed by 5 spaces
+// (so they look nice when indented 4 spaces).
+func WrapText(line string) string {
+	buf := []byte(line)
+	left := buf
+	for {
+		loc := wideLine.FindSubmatchIndex(left)
+		if nil == loc {
+			break
+		}
+		if 75 <= loc[1] - loc[0] {
+			left[loc[2]] = '\n'
+			left = left[loc[2]:]
+		} else {
+			left = left[loc[1]:]
+		}
+	}
+	return strings.ReplaceAll(string(buf), "\n", "\n     ")
+}
+
+
 func DescribeMetric(
 	count   int,
 	md      *monitoring.MetricDescriptor,
@@ -150,7 +175,7 @@ func DescribeMetric(
 			DumpJson("", buckets)
 		}
 		if *WithHelp {
-			fmt.Printf("    %s\n", md.Description)
+			fmt.Printf("    %s\n", WrapText(md.Description))
 		}
 	}
 }
