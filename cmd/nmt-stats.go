@@ -24,6 +24,8 @@ var AlsoEmpty = pflag.BoolP("empty", "e", false,
 	"Show all metrics, not just non-empty ones.")
 var AsJson = pflag.BoolP("json", "j", false,
 	"Dump the full JSON of each metric descriptor.")
+var WithCount = pflag.BoolP("count", "c", false,
+	"Show the count of each metric despite -e (very slow w/o -m=...).")
 var WithHelp = pflag.BoolP("help", "h", false,
 	"Show each metric's text description.")
 var WithBuckets = pflag.BoolP("buckets", "b", false,
@@ -57,7 +59,7 @@ func DumpJson(indent string, ix interface{}) {
 
 func usage() {
 	fmt.Println(Join("\n",
-	"nmt-stats [-qejhb] [-[mudon]=...] [project-id]",
+	"nmt-stats [-qejhbc] [-[mudon]=...] [project-id]",
 	"  By default, shows which StackDriver metrics are not empty.",
 	"  Every option can be abbreviated to its first letter.",
 	"  -?           Show this usage information.",
@@ -68,6 +70,7 @@ func usage() {
 	"  --help       Show each metric's text description.",
 	"  --buckets    Show bucket information about any histogram metrics.",
 	"               Ignored if -d, -e, or -j given.",
+	"  --count      With -e, shows metric counts (as w/o -e).  Slow w/o -m.",
 	"  --metric=PRE Only show metrics with these prefix(es), comma-separated.",
 	"  --unit=ms    Only show metrics with matching units.",
 	"  --depth=1-3  Only show groups of metrics.  -d1 just shows service/.",
@@ -159,24 +162,24 @@ func DescribeMetric(
 	buckets interface{},
 	eol     string,
 ) {
-	if *AlsoEmpty {
+	if *AlsoEmpty && ! *WithCount {
 		fmt.Printf("%c%c %s %s %d+%d%s\n", k, t, md.Type, u,
 			mon.IngestDelay(md)/time.Second,
 			mon.SamplePeriod(md)/time.Second, eol)
-	} else if 0 < count {
+	} else if 0 < count || *AlsoEmpty {
 		fmt.Printf("%4d %c%c %s %s %d+%d%s\n",
 			count, k, t, md.Type, u,
 			mon.IngestDelay(md)/time.Second,
 			mon.SamplePeriod(md)/time.Second, eol)
+	} else {
+		return
 	}
-	if *AlsoEmpty || 0 < count {
-		if *WithBuckets && nil != buckets {
-			fmt.Printf("    %s", bType)
-			DumpJson("", buckets)
-		}
-		if *WithHelp {
-			fmt.Printf("    %s\n", WrapText(md.Description))
-		}
+	if *WithBuckets && nil != buckets {
+		fmt.Printf("    %s", bType)
+		DumpJson("", buckets)
+	}
+	if *WithHelp {
+		fmt.Printf("    %s\n", WrapText(md.Description))
 	}
 }
 
@@ -209,11 +212,11 @@ func ShowMetric(
 			fmt.Printf("... %s/%s\r",
 				Join("/", parts[0:len(parts)-1]...), eol)
 		}
-		count = 0
 	}
+	count = 0
 
 	bucketType, buckets := "", interface{}(nil)
-	if !*AlsoEmpty {
+	if !*AlsoEmpty || *WithCount {
 		for ts := range client.StreamLatestTimeSeries(nil, proj, md, 5, "8h") {
 			count++
 			if 1 == count && 'H' == t && *Depth < 1 {
