@@ -24,6 +24,8 @@ var AlsoEmpty = pflag.BoolP("empty", "e", false,
 	"Show all metrics, not just non-empty ones.")
 var AsJson = pflag.BoolP("json", "j", false,
 	"Dump the full JSON of each metric descriptor.")
+var ShowValues = pflag.BoolP("values", "v", false,
+	"Dump the full JSON of most recent time-series values.")
 var WithCount = pflag.BoolP("count", "c", false,
 	"Show the count of each metric despite -e (very slow w/o -m=...).")
 var WithHelp = pflag.BoolP("help", "h", false,
@@ -59,23 +61,25 @@ func DumpJson(indent string, ix interface{}) {
 
 func usage() {
 	fmt.Println(Join("\n",
-	"nmt-stats [-qejhbc] [-[mudon]=...] [project-id]",
+	"nmt-stats [-qejvhbc] [-[mudon]=...] [project-id]",
 	"  By default, shows which StackDriver metrics are not empty.",
 	"  Every option can be abbreviated to its first letter.",
 	"  -?           Show this usage information.",
 	"  --quiet      Don't show names of empty metrics while searching.",
-	"               Implied if -e or -j given.",
-	"  --empty      Show all metrics, not just non-empty ones.",
+	"               Implied if -e, -j, or -v given.",
+	"  --empty      Show all metrics, not just non-empty ones.  Ignores -b.",
 	"  --json       Dump the full JSON of each metric descriptor.",
+	"  --values     Dump the JSON for the most recent metric values.",
+	"               Without -j, outputs nothing but above.  -jv outputs both.",
+	"               Either -j or -v ignores -h and -b.",
 	"  --help       Show each metric's text description.",
 	"  --buckets    Show bucket information about any histogram metrics.",
-	"               Ignored if -d, -e, or -j given.",
 	"  --count      With -e, shows metric counts (as w/o -e).  Slow w/o -m.",
 	"  --metric=PRE Only show metrics with these prefix(es), comma-separated.",
 	"  --unit=ms    Only show metrics with matching units.",
 	"  --depth=1-3  Only show groups of metrics.  -d1 just shows service/.",
 	"               -d2 shows service/object/.  -d3 can show svc/obj/sub/.",
-	"               -d causes -j, -h, and -b to be ignored.",
+	"               -d causes -j, -v, -h, and -b to be ignored.",
 	"  --{only|not}=[CDGHFIBS]",
 	"      Only show (or exclude) metrics using any of the following types:",
 	"          Cumulative Delta Gauge Histogram Float Int Bool String",
@@ -216,11 +220,18 @@ func ShowMetric(
 	count = 0
 
 	bucketType, buckets := "", interface{}(nil)
-	if !*AlsoEmpty || *WithCount {
+	if !*AlsoEmpty || *WithCount || *ShowValues {
 		for ts := range client.StreamLatestTimeSeries(nil, proj, md, 5, "8h") {
 			count++
-			if 1 == count && 'H' == t && *Depth < 1 {
-				bucketType, buckets = BucketInfo(ts.Points[0].Value)
+			if *Depth < 1 {
+				if *ShowValues {
+					if 1 < len(ts.Points) {
+						ts.Points = ts.Points[0:1]
+					}
+					DumpJson("", ts)
+				} else if 1 == count && 'H' == t {
+					bucketType, buckets = BucketInfo(ts.Points[0].Value)
+				}
 			}
 		}
 	}
@@ -231,7 +242,7 @@ func ShowMetric(
 		}
 	} else if *AsJson {
 		DumpJson("  ", md)
-	} else {
+	} else if ! *ShowValues {
 		DescribeMetric(count, md, k, t, u, bucketType, buckets, eol)
 	}
 	return count, prefix
@@ -249,7 +260,7 @@ func main() {
 	*OnlyTypes = strings.ToUpper(*OnlyTypes)
 	*NotTypes = strings.ToUpper(*NotTypes)
 	eol := " \x1b[K"
-	if *AlsoEmpty || *AsJson || *Quiet {
+	if *AlsoEmpty || *AsJson || *ShowValues || *Quiet {
 		*Quiet = true
 		eol = ""
 	}
