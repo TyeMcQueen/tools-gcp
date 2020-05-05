@@ -249,10 +249,8 @@ func main() {
 	*OnlyTypes = strings.ToUpper(*OnlyTypes)
 	*NotTypes = strings.ToUpper(*NotTypes)
 	eol := " \x1b[K"
-	if *AsJson {
+	if *AlsoEmpty || *AsJson || *Quiet {
 		*Quiet = true
-	}
-	if *AlsoEmpty || *Quiet {
 		eol = ""
 	}
 
