@@ -1,4 +1,4 @@
-package mon2prom
+package config
 
 import (
 	"os"

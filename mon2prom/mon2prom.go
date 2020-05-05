@@ -11,6 +11,7 @@ import (
 
 	prom    "github.com/prometheus/client_golang/prometheus"
 	"github.com/TyeMcQueen/tools-gcp/mon"
+	"github.com/TyeMcQueen/tools-gcp/mon2prom/config"
 	"github.com/TyeMcQueen/tools-gcp/mon2prom/label"
 	"github.com/TyeMcQueen/tools-gcp/mon2prom/value"
 	"github.com/TyeMcQueen/go-lager"
@@ -62,7 +63,7 @@ func basicPromVec(
 	md          *sd.MetricDescriptor,
 ) *PromVector {
 	pv := PromVector{}
-	subsys := Config.Subsystem(md.Type)
+	subsys := config.Config.Subsystem(md.Type)
 	if "" == subsys {
 		lager.Warn().Map("Ignoring metric lacking subsystem", md.Type)
 		return nil
@@ -71,7 +72,7 @@ func basicPromVec(
 	pv.MonDesc = md
 	pv.MetricKind = md.MetricKind[0]
 	pv.ValueType = md.ValueType[0]
-	pv.scaler = Config.Scaler(pv.MonDesc.Unit)
+	pv.scaler = config.Config.Scaler(pv.MonDesc.Unit)
 	if 'D' == pv.ValueType {
 		switch md.ValueType[1] {
 			case 'O': pv.ValueType = 'F'    // DOuble -> Float
@@ -82,8 +83,8 @@ func basicPromVec(
 		lager.Warn().Map("Ignoring Histogram Gauge", md.Type)
 		return nil
 	}
-	pv.PromName = Config.System + "_" + subsys + "_" +
-		Config.MetricName(pv.MonDesc.Type, pv.MetricKind, pv.ValueType)
+	pv.PromName = config.Config.System + "_" + subsys + "_" +
+		config.Config.MetricName(pv.MonDesc.Type, pv.MetricKind, pv.ValueType)
 	return &pv
 }
 
@@ -121,7 +122,7 @@ func (pv *PromVector) addTimeSeriesDetails(tss []*sd.TimeSeries) bool {
 	}
 	if dv := tss[0].Points[0].Value.DistributionValue; nil != dv {
 		if eb := dv.BucketOptions.ExponentialBuckets; nil != eb {
-			minBound, minRatio, maxBound := Config.
+			minBound, minRatio, maxBound := config.Config.
 				HistogramLimits(pv.MonDesc.Unit)
 			lager.Debug().Map("minBound", minBound,
 				"minRatio", minRatio, "maxBound", maxBound)
@@ -155,7 +156,7 @@ func (pv *PromVector) addTimeSeriesDetails(tss []*sd.TimeSeries) bool {
 // Looks up the label names to be ignored based on the PromVector's
 // MetricDescriptor.
 func (pv *PromVector) BadLabels() []string {
-	return Config.BadLabels(pv.MonDesc)
+	return config.Config.BadLabels(pv.MonDesc)
 }
 
 
@@ -165,7 +166,7 @@ func (pv *PromVector) BadLabels() []string {
 func ExpBuckets(
 	exp         *sd.Exponential,
 	isInt       bool,
-	scale       ScalingFunc,
+	scale       config.ScalingFunc,
 	minBound,
 	minRatio,
 	maxBound    float64,
