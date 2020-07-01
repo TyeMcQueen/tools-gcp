@@ -61,8 +61,8 @@ func DumpJson(indent string, ix interface{}) {
 
 func usage() {
 	fmt.Println(Join("\n",
-	"nmt-stats [-qejvhbc] [-[mudon]=...] [project-id]",
-	"  By default, shows which StackDriver metrics are not empty.",
+	"gcp-metrics [-qejvhbc] [-[mudon]=...] [project-id]",
+	"  By default, shows which GCP metrics are not empty.",
 	"  Every option can be abbreviated to its first letter.",
 	"  -?           Show this usage information.",
 	"  --quiet      Don't show names of empty metrics while searching.",

@@ -61,14 +61,14 @@ func divide(d float64) ScalingFunc {
 
 
 func init() {
-	r, err := os.Open("sdconfig.yaml")
+	r, err := os.Open("gcp2prom.yaml")
 	if nil != err {
-		lager.Exit().Map("Can't read config.yaml", err)
+		lager.Exit().Map("Can't read gcp2prom.yaml", err)
 	}
 	y := yaml.NewDecoder(r)
 	err = y.Decode(&Config.config)
 	if nil != err {
-		lager.Exit().Map("Invalid yaml in config.yaml", err)
+		lager.Exit().Map("Invalid yaml in gcp2prom.yaml", err)
 	}
 	lager.Debug().Map("Loaded config", Config.config)
 	h := Config.config.Histogram
