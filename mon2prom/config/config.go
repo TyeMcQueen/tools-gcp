@@ -11,22 +11,86 @@ import (
 )
 
 
+//// Global Data Types ////
+
+// This type specifies what data can be put in the gcp2prom.yaml
+// configuration file to control which GCP metrics can be exported to
+// Prometheus and to configure how each gets converted.
+//
+// Note that YAML lowercases the letters of keys so, for example, to set
+// MaxBuckets, your YAML would contain something like `maxbuckets: 32`.
 type config struct {
+	// System is the first part of each Prometheus metric name.
 	System      string
+
+	// Subsystem maps GCP metric path prefixes to the 2nd part of Prom metric
+	// names.  Each key should be a prefix of some GCP metric names (paths) up
+	// to (and including) a '/' character (for example,
+	// "bigquery.googleapis.com/query/").  Metrics that do not match any of
+	// these prefixes are silently ignored.
+	//
+	// Only the longest matching prefix is applied (per metric).
 	Subsystem   map[string]string
+
+	// Units maps a unit name to the name of a predefined scaling factor to
+	// convert to base units that are preferred in Prometheus.  The names
+	// of the conversion functions look like multiplication or division
+	// operations, often with repeated parts.  For example,
+	// `"ns": "/1000/1000/1000"` to convert nanoseconds to seconds and
+	// `"d": "*60*60*24"` to convert days to seconds.
+	//
+	// Each key is a string containing a comma-separated list of unit types.
+	// If you use the same unit type in multiple entries, then which of those
+	// entries that will be applied to a metric will be "random".
 	Units       map[string]string
+
+	// Suffix adjusts the last part of Prometheus
+	// metric names by replacing a suffix.
+	//
+	// For each section, only the longest matching suffix is applied.
 	Suffix      struct {
 		Any         map[string]string
 		Histogram   map[string]string
 		Counter     map[string]string
 		Gauge       map[string]string
 	}
+
+	// Histogram is a mapping ...
 	Histogram   map[string]struct {
+		// MinBound specifies the minimum allowed bucket boundary.  If the
+		// first bucket boundary is below this value, then the lowest
+		// bucket boundary that is at least MinBound becomes the first
+		// bucket boundary (and the counts for all prior buckets get
+		// combined into the new first bucket).  Since metric values can
+		// be negative, a MinBound of 0.0 is not ignored (unless MaxBound
+		// is also 0.0).
 		MinBound,
+		// MinRatio specifies the minimum ratio between adjacent bucket
+		// boundaries.  If the ratio between two adjacent bucket boundaries
+		// (larger boundary divided by smaller boundary) is below MinRatio,
+		// then the larger boundary (at least) will be removed, combining the
+		// counts from at least two buckets into a new, wider bucket.
+		//
+		// If MinRatio is 0.0, then no minimum is applied.  Specifying a
+		// MinRatio at or below 1.0 that is not 0.0 is a fatal error.
 		MinRatio,
+		// As bucket boundaries are iterated over from smallest to largest,
+		// eliminating some due to either MinBound or MinRatio, if a bucket
+		// boundary is reached that is larger than MaxBound, then the prior
+		// kept bucket boundary becomes the last (largest) bucket boundary.
 		MaxBound    float64
 	}
+
+	// If the number of buckets is large than MaxBuckets, then the metric is
+	// just ignored and will not be exported to Prometheus.
 	MaxBuckets  int
+
+	// BadLabels specifies rules for identifying labels to be omitted from
+	// the metrics exported to Prometheus.  This is usually used to remove
+	// labels that would cause high-cardinality metrics.
+	//
+	// If a metric matches more than one rule, then any labels mentioned in
+	// any of the matching rules will be omitted.
 	BadLabels   []struct {
 		Labels  []string
 		Prefix  string
@@ -39,9 +103,14 @@ type config struct {
 
 
 type conf struct { config }
-var Config conf
 
 type ScalingFunc func(float64) float64
+
+
+//// Global Variables ////
+
+// The global configuration loaded from gcp2prom.yaml.
+var Config conf
 
 var Scale = map[string]ScalingFunc{
 	"*1024*1024*1024":  multiply( 1024.0*1024.0*1024.0 ),
@@ -52,9 +121,15 @@ var Scale = map[string]ScalingFunc{
 	"/1000/1000":       divide( 1000.0*1000.0 ),
 	"/1000/1000/1000":  divide( 1000.0*1000.0*1000.0 ),
 }
+
+
+//// Functions ////
+
+
 func multiply(m float64) ScalingFunc {
 	return func(f float64) float64 { return f*m }
 }
+
 func divide(d float64) ScalingFunc {
 	return func(f float64) float64 { return f/d }
 }
