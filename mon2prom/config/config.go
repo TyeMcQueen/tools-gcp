@@ -13,20 +13,20 @@ import (
 
 type config struct {
 	System      string
-	Units       map[string]string
 	Subsystem   map[string]string
+	Units       map[string]string
 	Suffix      struct {
 		Any         map[string]string
 		Histogram   map[string]string
 		Counter     map[string]string
 		Gauge       map[string]string
 	}
-	MaxBuckets  int
 	Histogram   map[string]struct {
 		MinBound,
 		MinRatio,
 		MaxBound    float64
 	}
+	MaxBuckets  int
 	BadLabels   []struct {
 		Labels  []string
 		Prefix  string

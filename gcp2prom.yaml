@@ -1,5 +1,14 @@
 ---
 system:       gcp
+subsystem:
+  loadbalancing.googleapis.com/https/:          lb_https
+  loadbalancing.googleapis.com/https/internal/: ilb_https
+  loadbalancing.googleapis.com/l3/external/:    lb_l3
+  loadbalancing.googleapis.com/l3/internal/:    ilb_l3
+  loadbalancing.googleapis.com/tcp_ssl_proxy/:  tcp_ssl_proxy
+  bigquery.googleapis.com/query/:               bigquery_query
+  bigquery.googleapis.com/slots/:               bigquery_slot
+  bigquery.googleapis.com/storage/:             bigquery_store
 units:
   "10^2.%":   /100
   "%":        /100
@@ -11,15 +20,17 @@ units:
   ms:         /1000
   us:         /1000/1000
   ns:         /1000/1000/1000
-subsystem:
-  loadbalancing.googleapis.com/https/:          lb_https
-  loadbalancing.googleapis.com/https/internal/: ilb_https
-  loadbalancing.googleapis.com/l3/external/:    lb_l3
-  loadbalancing.googleapis.com/l3/internal/:    ilb_l3
-  loadbalancing.googleapis.com/tcp_ssl_proxy/:  tcp_ssl_proxy
-  bigquery.googleapis.com/query/:               bigquery_query
-  bigquery.googleapis.com/slots/:               bigquery_slot
-  bigquery.googleapis.com/storage/:             bigquery_store
+histogram:
+  s,ms,ns,us:
+    minbound: 0.01
+    minratio: 1.9
+    maxbound: 500
+maxBuckets: 32
+badlabels:
+  - labels: [proxy_continent, client_country]
+    prefix: loadbal
+    only: H
+    unit: ms
 suffix:
   any:
     /total_latencies:         /combined_latencies
@@ -45,14 +56,3 @@ suffix:
   gauge:
     instance_group/size:  instance_count
     allocation/usage:     quota_usage
-maxBuckets: 32
-histogram:
-  s,ms,ns,us:
-    minbound: 0.01
-    minratio: 1.9
-    maxbound: 500
-badlabels:
-  - labels: [proxy_continent, client_country]
-    prefix: loadbal
-    only: H
-    unit: ms
