@@ -36,6 +36,23 @@ type Selector struct {
 	Unit    string      // Required unit designation.
 }
 
+// MetricMatcher contains the information about one type of GCP metric that
+// is used when matching metrics against a Selector.  This is mostly just
+// a GCP MetricDescriptor plus the last part of the metric name to be used
+// in Prometheus (as computed so far).
+type MetricMatcher struct {
+	MD          *monitoring.MetricDescriptor
+	Name        string      // Last part of Prom metric name, so far.
+	// Metric kind; one of 'C', 'D', or 'G' for cumulative, delta, or gauge.
+	Kind        byte
+	// Metric type; one of 'F', 'I', 'S', 'H', or 'B' for float, int, string,
+	// histogram (distribution), or bool.
+	Type        byte
+	// MD.Unit but '' becomes '-' and values (or parts of values) like
+	// '{Bytes}' are replaced by just '{}'.
+	Unit        string
+}
+
 // This type specifies what data can be put in the gcp2prom.yaml
 // configuration file to control which GCP metrics can be exported to
 // Prometheus and to configure how each gets converted.
@@ -182,6 +199,15 @@ func init() {
 }
 
 
+func MatchMetric(md *monitoring.MetricDescriptor) *MetricMatcher {
+	mm := new(MetricMatcher)
+	mm.MD = md
+	mm.Kind, mm.Type, mm.Unit = mon.MetricAbbrs(md)
+	mm.Name = md.Type
+	return mm
+}
+
+
 // Returns `nil` or a function that scales float64 values from the units
 // used in StackDriver to the base units that are preferred in Prometheus.
 func (c conf) Scaler(unit string) ScalingFunc {
@@ -225,11 +251,9 @@ func (c conf) HistogramLimits(unit string) (
 }
 
 
-func matches(s Selector, md *monitoring.MetricDescriptor) bool {
-	k, t, u := mon.MetricAbbrs(md)
-	path := md.Type
-	if "" != s.Prefix && ! strings.HasPrefix(path, s.Prefix) ||
-	   "" != s.Suffix && ! strings.HasSuffix(path, s.Suffix) ||
+func (mm *MetricMatcher) matches(s Selector) bool {
+	if "" != s.Prefix && ! strings.HasPrefix(mm.MD.Type, s.Prefix) ||
+	   "" != s.Suffix && ! strings.HasSuffix(mm.Name, s.Suffix) ||
 	   "" != s.Only && ! Contains(s.Only, k, t) ||
 	   "" != s.Not && Contains(s.Not, k, t) ||
 	   "" != s.Unit && u != s.Unit {
