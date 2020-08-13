@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 	"os"
 	"strings"
 	"time"
@@ -57,9 +58,17 @@ func MustMonitoringClient(gcpClient *http.Client) Client {
 }
 
 
+var braces = regexp.MustCompile(`[{][^{}]+[}]`) // Non-greedy match for {.*}.
+
 func MetricAbbrs(md *monitoring.MetricDescriptor) (byte, byte, string) {
 	k := md.MetricKind[0]
 	t := md.ValueType[0]
+	if 'M' == k {
+		k = 'K'     // 'K' for unspecified Kind (should never happen)
+	}
+	if 'V' == t {
+		t = 'T'     // 'T' for unspecified Type (should never happen)
+	}
 	if 'D' == t {
 		switch md.ValueType[1] {
 			case 'O': t = 'F'   // Double -> Float
@@ -69,8 +78,8 @@ func MetricAbbrs(md *monitoring.MetricDescriptor) (byte, byte, string) {
 	u := md.Unit
 	if "" == u {
 		u = "-"
-	} else if '{' == u[0] { // }
-		u = "{}"
+	} else {
+		u = braces.ReplaceAllString(u, "{}")
 	}
 	return k, t, u
 }
