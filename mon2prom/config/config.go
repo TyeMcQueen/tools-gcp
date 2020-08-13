@@ -32,7 +32,7 @@ type config struct {
 	// Only the longest matching prefix is applied (per metric).
 	Subsystem   map[string]string
 
-	// Units maps a unit name to the name of a predefined scaling factor to
+	// Unit maps a unit name to the name of a predefined scaling factor to
 	// convert to base units that are preferred in Prometheus.  The names
 	// of the conversion functions look like multiplication or division
 	// operations, often with repeated parts.  For example,
@@ -42,7 +42,7 @@ type config struct {
 	// Each key is a string containing a comma-separated list of unit types.
 	// If you use the same unit type in multiple entries, then which of those
 	// entries that will be applied to a metric will be "random".
-	Units       map[string]string
+	Unit        map[string]string
 
 	// Suffix adjusts the last part of Prometheus
 	// metric names by replacing a suffix.
@@ -85,19 +85,19 @@ type config struct {
 	// just ignored and will not be exported to Prometheus.
 	MaxBuckets  int
 
-	// BadLabels specifies rules for identifying labels to be omitted from
+	// OmitLabels specifies rules for identifying labels to be omitted from
 	// the metrics exported to Prometheus.  This is usually used to remove
 	// labels that would cause high-cardinality metrics.
 	//
 	// If a metric matches more than one rule, then any labels mentioned in
 	// any of the matching rules will be omitted.
-	BadLabels   []struct {
+	OmitLabel   []struct {
 		Labels  []string
 		Prefix  string
 		Suffix  string
 		Only    string
 		Not     string
-		Units   string
+		Unit    string
 	}
 }
 
@@ -162,7 +162,7 @@ func init() {
 // Returns `nil` or a function that scales float64 values from the units
 // used in StackDriver to the base units that are preferred in Prometheus.
 func (c conf) Scaler(unit string) ScalingFunc {
-	key := c.Units[unit]
+	key := c.Unit[unit]
 	if "" == key {
 		return nil
 	}
@@ -242,16 +242,16 @@ func Contains(set string, k, t byte) bool {
 
 // Returns the label names to be dropped when exporting the passed-in
 // StackDriver metric to Prometheus.
-func (c conf) BadLabels(md *monitoring.MetricDescriptor) []string {
+func (c conf) OmitLabels(md *monitoring.MetricDescriptor) []string {
 	labels := make([]string, 0)
 	k, t, u := mon.MetricAbbrs(md)
 	path := md.Type
-	for _, spec := range c.config.BadLabels {
+	for _, spec := range c.config.OmitLabel {
 		if "" != spec.Prefix && !strings.HasPrefix(path, spec.Prefix) ||
 		   "" != spec.Suffix && !strings.HasSuffix(path, spec.Suffix) ||
 		   "" != spec.Only && !Contains(spec.Only, k, t) ||
 		   "" != spec.Not && Contains(spec.Not, k, t) ||
-		   "" != spec.Units && u != spec.Units {
+		   "" != spec.Unit && u != spec.Unit {
 			continue
 		}
 		labels = append(labels, spec.Labels...)

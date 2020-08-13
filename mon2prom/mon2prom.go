@@ -107,7 +107,7 @@ func (pv *PromVector) addTimeSeriesDetails(
 	lager.Debug().Map("For", pv.PromName,
 		"Labels", pv.MonDesc.Labels, "Resource keys", resourceKeys)
 
-	pv.Set.Init(pv.BadLabels(), pv.MonDesc.Labels, resourceKeys)
+	pv.Set.Init(pv.OmitLabels(), pv.MonDesc.Labels, resourceKeys)
 	constLabels := prom.Labels{}
 	if !hasProjectID {
 		constLabels = prom.Labels{"project_id": pv.ProjectID}
@@ -166,8 +166,8 @@ func (pv *PromVector) resampleHist(
 
 // Looks up the label names to be ignored based on the PromVector's
 // MetricDescriptor.
-func (pv *PromVector) BadLabels() []string {
-	return config.Config.BadLabels(pv.MonDesc)
+func (pv *PromVector) OmitLabels() []string {
+	return config.Config.OmitLabels(pv.MonDesc)
 }
 
 
