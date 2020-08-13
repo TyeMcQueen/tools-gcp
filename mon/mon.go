@@ -62,8 +62,8 @@ func MetricAbbrs(md *monitoring.MetricDescriptor) (byte, byte, string) {
 	t := md.ValueType[0]
 	if 'D' == t {
 		switch md.ValueType[1] {
-			case 'O': t = 'F'
-			case 'I': t = 'H'
+			case 'O': t = 'F'   // Double -> Float
+			case 'I': t = 'H'   // Distribution -> Histogram
 		}
 	}
 	u := md.Unit
@@ -187,6 +187,7 @@ func (m Client) GetLatestTimeSeries(
 		start := time.Now()
 		page, err := lister.Do()
 		for nil != err && QuotaExceeded == conn.ErrorCode(err) {
+			lager.Debug().Map("Quota exhaustion error", err)
 			lager.Warn().List("Sleeping due to quota exhaustion")
 			time.Sleep(20*time.Second)
 			page, err = lister.Do()

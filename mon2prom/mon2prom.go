@@ -1,6 +1,6 @@
 /*
-The mon2prom package supports reading TimeSeries metric values from StackDriver
-(part of Google Cloud Services, GCS) and exporting them as Prometheus metrics.
+The mon2prom package supports reading TimeSeries metric values from GCP
+(Google Cloud Platform) and exporting them as Prometheus metrics.
 */
 package mon2prom
 
@@ -29,7 +29,7 @@ type PromVector struct {
 	scaler          func(float64) float64
 	MetricKind      byte                // 'D'elta, 'G'auge, or 'C'ounter
 	ValueType       byte                // Histogram, Int, Float, or Bool
-	BucketBounds    []float64
+	BucketBounds    []float64           // Boundaries between hist buckets
 	SubBuckets      []int               // Count of SD buckets in each Prom one.
 	label.Set                           // To build hash keys from label values.
 	MetricMap       *map[label.RuneList]value.Metric
@@ -102,10 +102,9 @@ func (pv *PromVector) addTimeSeriesDetails(tss []*sd.TimeSeries) bool {
 			}
 		}
 	}
-	lager.Debug().Map(
-		"For", pv.PromName, "Resource keys", resourceKeys)
-	lager.Debug().Map(
+	lager.Debug().Map("For", pv.PromName,
 		"Labels", pv.MonDesc.Labels, "Resource keys", resourceKeys)
+
 	pv.Set.Init(pv.BadLabels(), pv.MonDesc.Labels, resourceKeys)
 	constLabels := prom.Labels{}
 	if !hasProjectID {
@@ -114,12 +113,14 @@ func (pv *PromVector) addTimeSeriesDetails(tss []*sd.TimeSeries) bool {
 	pv.PromDesc = prom.NewDesc(
 		pv.PromName, pv.MonDesc.Description, pv.KeptKeys(), constLabels,
 	)
+
 	if 0 == len(tss) {
 		lager.Debug().Map("Got 0 time series metrics for", pv.PromName)
 		return false
 	} else if 0 == len(tss[0].Points) {
 		lager.Exit().Map("First time series has 0 points for", pv.PromName)
 	}
+
 	if dv := tss[0].Points[0].Value.DistributionValue; nil != dv {
 		if eb := dv.BucketOptions.ExponentialBuckets; nil != eb {
 			minBound, minRatio, maxBound := config.Config.
@@ -147,7 +148,7 @@ func (pv *PromVector) addTimeSeriesDetails(tss []*sd.TimeSeries) bool {
 		}
 	} else if 'H' == pv.ValueType {
 		lager.Fail().Map(
-			"Hist metric lacks DistributionValue", tss[0].Points[0])
+			"Histogram metric lacks DistributionValue", tss[0].Points[0])
 	}
 	return true
 }
