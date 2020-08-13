@@ -91,7 +91,9 @@ func basicPromVec(
 
 // Finishes initializing the PromVector using recent values from the source
 // time series.  Returns `false` if the metric cannot be exported.
-func (pv *PromVector) addTimeSeriesDetails(tss []*sd.TimeSeries) bool {
+func (pv *PromVector) addTimeSeriesDetails(
+	tss []*sd.TimeSeries,
+) bool {
 	hasProjectID := false
 	resourceKeys := make(map[string]bool)
 	for _, ts := range tss {
@@ -122,33 +124,41 @@ func (pv *PromVector) addTimeSeriesDetails(tss []*sd.TimeSeries) bool {
 	}
 
 	if dv := tss[0].Points[0].Value.DistributionValue; nil != dv {
-		if eb := dv.BucketOptions.ExponentialBuckets; nil != eb {
-			minBound, minRatio, maxBound := config.Config.
-				HistogramLimits(pv.MonDesc.Unit)
-			lager.Debug().Map("minBound", minBound,
-				"minRatio", minRatio, "maxBound", maxBound)
-			pv.BucketBounds, pv.SubBuckets = ExpBuckets(
-				eb,
-				'I' == pv.ValueType,
-				pv.scaler,
-				minBound, minRatio, maxBound,
-			)
-			lager.Debug().Map("bounds", pv.BucketBounds,
-				"subBuckets", pv.SubBuckets)
-			if nil == pv.BucketBounds {
-				lager.Fail().Map(
-					"Histogram has too many buckets", eb,
-					"For", pv.MonDesc.Type,
-					"Units", pv.MonDesc.Unit,
-				)
-				return false
-			}
-		} else {
-			lager.Exit().List("Haven't implemented non-exponential buckets")
-		}
+		return pv.resampleHist(dv)
 	} else if 'H' == pv.ValueType {
 		lager.Fail().Map(
 			"Histogram metric lacks DistributionValue", tss[0].Points[0])
+	}
+	return true
+}
+
+
+func (pv *PromVector) resampleHist(
+	dv      *sd.Distribution,
+) bool {
+	if eb := dv.BucketOptions.ExponentialBuckets; nil != eb {
+		minBound, minRatio, maxBound := config.Config.
+			HistogramLimits(pv.MonDesc.Unit)
+		lager.Debug().Map("minBound", minBound,
+			"minRatio", minRatio, "maxBound", maxBound)
+		pv.BucketBounds, pv.SubBuckets = ExpBuckets(
+			eb,
+			'I' == pv.ValueType,
+			pv.scaler,
+			minBound, minRatio, maxBound,
+		)
+		lager.Debug().Map("bounds", pv.BucketBounds,
+			"subBuckets", pv.SubBuckets)
+		if nil == pv.BucketBounds {
+			lager.Fail().Map(
+				"Histogram has too many buckets", eb,
+				"For", pv.MonDesc.Type,
+				"Units", pv.MonDesc.Unit,
+			)
+			return false
+		}
+	} else {
+		lager.Exit().List("Haven't implemented non-exponential buckets")
 	}
 	return true
 }
