@@ -6,7 +6,7 @@ import (
 
 	"github.com/TyeMcQueen/tools-gcp/mon"
 	"github.com/TyeMcQueen/go-lager"
-	"google.golang.org/api/monitoring/v3"
+	sd "google.golang.org/api/monitoring/v3"
 	"gopkg.in/yaml.v2"
 )
 
@@ -29,8 +29,8 @@ import (
 // For Unit, '' becomes '-' and values (or parts of values) like '{Bytes}'
 // become '{}'.
 type Selector struct {
-	Prefix  string      // Prefix to match against full GCP metric paths.
-	Suffix  string      // Suffix to match against Prom metric name.
+	Prefix  []string    // Prefix(es) to match against full GCP metric paths.
+	Suffix  []string    // Suffix(es) to match against Prom metric name.
 	Only    string      // Required attributes (letters from "CDGHFIBS").
 	Not     string      // Disallowed attributes (letters from "CDGHFIBS").
 	Unit    string      // Required unit designation.
@@ -41,7 +41,7 @@ type Selector struct {
 // a GCP MetricDescriptor plus the last part of the metric name to be used
 // in Prometheus (as computed so far).
 type MetricMatcher struct {
-	MD          *monitoring.MetricDescriptor
+	MD          *sd.MetricDescriptor
 	Name        string      // Last part of Prom metric name, so far.
 	// Metric kind; one of 'C', 'D', or 'G' for cumulative, delta, or gauge.
 	Kind        byte
@@ -199,7 +199,7 @@ func init() {
 }
 
 
-func MatchMetric(md *monitoring.MetricDescriptor) *MetricMatcher {
+func MatchMetric(md *sd.MetricDescriptor) *MetricMatcher {
 	mm := new(MetricMatcher)
 	mm.MD = md
 	mm.Kind, mm.Type, mm.Unit = mon.MetricAbbrs(md)
@@ -252,13 +252,44 @@ func (c conf) HistogramLimits(unit string) (
 
 
 func (mm *MetricMatcher) matches(s Selector) bool {
-	if "" != s.Prefix && ! strings.HasPrefix(mm.MD.Type, s.Prefix) ||
-	   "" != s.Suffix && ! strings.HasSuffix(mm.Name, s.Suffix) ||
-	   "" != s.Only && ! Contains(s.Only, k, t) ||
-	   "" != s.Not && Contains(s.Not, k, t) ||
-	   "" != s.Unit && u != s.Unit {
+	if 0 < len(s.Prefix) {
+		match := false
+		for _, p := range s.Prefix {
+			if strings.HasPrefix(mm.MD.Type, p) {
+				match = true
+				break
+			}
+		}
+		if ! match {
+			return false
+		}
+	}
+
+	if 0 < len(s.Suffix) {
+		match := false
+		for _, s := range s.Suffix {
+			if strings.HasSuffix(mm.Name, s) {
+				match = true
+				break
+			}
+		}
+		if ! match {
+			return false
+		}
+	}
+
+	if "" != s.Only && ! Contains(s.Only, mm.Kind, mm.Type) {
 		return false
 	}
+
+	if "" != s.Not && Contains(s.Not, mm.Kind, mm.Type) {
+		return false
+	}
+
+	if "" != s.Unit && u != s.Unit {
+		return false
+	}
+
 	return true
 }
 
@@ -303,7 +334,7 @@ func Contains(set string, k, t byte) bool {
 
 // Returns the label names to be dropped when exporting the passed-in
 // StackDriver metric to Prometheus.
-func (c conf) OmitLabels(md *monitoring.MetricDescriptor) []string {
+func (c conf) OmitLabels(md *sd.MetricDescriptor) []string {
 	labels := make([]string, 0)
 	k, t, u := mon.MetricAbbrs(md)
 	path := md.Type
