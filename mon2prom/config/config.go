@@ -13,6 +13,29 @@ import (
 
 //// Global Data Types ////
 
+// Selector is the type used in each "For" entry, selecting which metrics to
+// apply the associated settings to.  A missing or empty "For" entry matches
+// every metric.
+//
+// For each top-level element in a Selector, specifying more than one value
+// restricts to metrics matching _any_ of the values in that list ("or").
+// For Not, that means that a metric is excluded if it matches any of the
+// attributes listed ("nor").  But a metric only matches a Selector if it
+// matches every non-empty, top-level element ("and").
+//
+// The letters used in Only and Not stand for: Cumulative, Delta, Gauge,
+// Histogram, Float, Int, Bool, and String.
+//
+// For Unit, '' becomes '-' and values (or parts of values) like '{Bytes}'
+// become '{}'.
+type Selector struct {
+	Prefix  string      // Prefix to match against full GCP metric paths.
+	Suffix  string      // Suffix to match against Prom metric name.
+	Only    string      // Required attributes (letters from "CDGHFIBS").
+	Not     string      // Disallowed attributes (letters from "CDGHFIBS").
+	Unit    string      // Required unit designation.
+}
+
 // This type specifies what data can be put in the gcp2prom.yaml
 // configuration file to control which GCP metrics can be exported to
 // Prometheus and to configure how each gets converted.
@@ -199,6 +222,20 @@ func (c conf) HistogramLimits(unit string) (
 ) {
 	h := c.Histogram[unit]
 	return h.MinBound, h.MinRatio, h.MaxBound
+}
+
+
+func matches(s Selector, md *monitoring.MetricDescriptor) bool {
+	k, t, u := mon.MetricAbbrs(md)
+	path := md.Type
+	if "" != s.Prefix && ! strings.HasPrefix(path, s.Prefix) ||
+	   "" != s.Suffix && ! strings.HasSuffix(path, s.Suffix) ||
+	   "" != s.Only && ! Contains(s.Only, k, t) ||
+	   "" != s.Not && Contains(s.Not, k, t) ||
+	   "" != s.Unit && u != s.Unit {
+		return false
+	}
+	return true
 }
 
 
