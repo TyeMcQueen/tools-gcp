@@ -5,8 +5,8 @@ cloud.google.com/go v0.38.0/go.mod h1:990N+gfupTy94rShfmMCWGDn0LpTmnzTp2qbd1dvSR
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/TyeMcQueen/go-lager v1.0.0 h1:Jy/592i/S7Ze3+rKDjAcFQAOM/62cLb3jpPpnu0N4sI=
 github.com/TyeMcQueen/go-lager v1.0.0/go.mod h1:f3qKaWxklJZDWFomN1JLnyO/AkOXrqhML60negx/wys=
-github.com/TyeMcQueen/go-tutl v0.0.0-20190204014423-dec7824b087c h1:yn3gnmIL1uMqqX7PC08bRbSE1VMMEiu5K2WI5i027/Y=
-github.com/TyeMcQueen/go-tutl v0.0.0-20190204014423-dec7824b087c/go.mod h1:nW7zRt1PqznqPaES2UHtn9LjHis4KQG58b1MAlB+SWA=
+github.com/TyeMcQueen/go-tutl v1.0.0 h1:pvT+LXkEpWxSCLlFuhAFe3ws/FosGvUiU09zlNpK9RM=
+github.com/TyeMcQueen/go-tutl v1.0.0/go.mod h1:nW7zRt1PqznqPaES2UHtn9LjHis4KQG58b1MAlB+SWA=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
