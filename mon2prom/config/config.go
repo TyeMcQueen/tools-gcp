@@ -33,7 +33,7 @@ type Selector struct {
 	Suffix  []string    // Suffix(es) to match against Prom metric name.
 	Only    string      // Required attributes (letters from "CDGHFIBS").
 	Not     string      // Disallowed attributes (letters from "CDGHFIBS").
-	Unit    string      // Required unit designation.
+	Unit    string      // Required unit designation(s) (comma-separated).
 }
 
 // MetricMatcher contains the information about one type of GCP metric that
@@ -175,6 +175,30 @@ func divide(d float64) ScalingFunc {
 }
 
 
+func commaSeparated(list string, nilForSingle bool) []string {
+	if ! strings.Contains(list, ",") {
+		if nilForSingle {
+			return nil
+		} else if list = strings.TrimSpace(list); "" == list {
+			return []string{}
+		} else {
+			return []string{list}
+		}
+	}
+
+	items := strings.Split(list, ",")
+	o := 0
+	for _, v := range items {
+		v = strings.TrimSpace(v)
+		if "" != v {
+			items[o] = v
+			o++
+		}
+	}
+	return items[:o]
+}
+
+
 func init() {
 	r, err := os.Open("gcp2prom.yaml")
 	if nil != err {
@@ -286,8 +310,17 @@ func (mm *MetricMatcher) matches(s Selector) bool {
 		return false
 	}
 
-	if "" != s.Unit && u != s.Unit {
-		return false
+	if list := commaSeparated(s.Unit, false); 0 < len(list) {
+		match := false
+		for _, u := range list {
+			if u == mm.Unit {
+				match = true
+				break
+			}
+		}
+		if ! match {
+			return false
+		}
 	}
 
 	return true
