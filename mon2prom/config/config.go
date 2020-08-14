@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/TyeMcQueen/tools-gcp/mon"
@@ -43,6 +44,7 @@ type Selector struct {
 type MetricMatcher struct {
 	conf        Configuration
 	MD          *sd.MetricDescriptor
+	SubSys      string      // Middle part of Prom metric name.
 	Name        string      // Last part of Prom metric name, so far.
 	// Metric kind; one of 'C', 'D', or 'G' for cumulative, delta, or gauge.
 	Kind        byte
@@ -69,6 +71,12 @@ type Configuration struct {
 	// to (and including) a '/' character (for example,
 	// "bigquery.googleapis.com/query/").  Metrics that do not match any of
 	// these prefixes are silently ignored.
+	//
+	// The prefix is stripped from the GCP metric path to get the (first
+	// iteration) of the last part of each metric name in Prometheus.  Any
+	// '/' characters left after the prefix are left as-is until all Suffix
+	// replacements are finished (see Suffix item below), at which point any
+	// remaining '/' characters become '_' characters.
 	//
 	// Only the longest matching prefix is applied (per metric).
 	Subsystem   map[string]string
@@ -245,6 +253,14 @@ func init() {
 }
 
 
+// Constructs a MetricMatcher for the given GCP MetricDescriptor.  If a second
+// argument is passed, it should be a string holding the path to a YAML file
+// containing the configuration to be used for exporting the metric to
+// Prometheus.
+//
+// Returns `nil` if the metric is not one that can be exported to Prometheus
+// based on the configuration chosen (because no Subsystem has been configured
+// for it).
 func MatchMetric(
 	md *sd.MetricDescriptor,
 	configFile ...string,
@@ -259,23 +275,39 @@ func MatchMetric(
 	}
 	mm.MD = md
 	mm.Kind, mm.Type, mm.Unit = mon.MetricAbbrs(md)
-	mm.Name = md.Type
+	mm.SubSys, mm.Name = subSystem(md.Type, mm.conf.Subsystem)
+	if "" == mm.SubSys {
+		return nil
+	}
 	return mm
 }
 
 
 // Returns the configured subsystem name for this metric type.
 func (c Configuration) GetSubsystem(metricType string) string {
-	parts := strings.Split(metricType, "/")
+	subsys, suff := subSystem(metricType, c.Subsystem)
+	return subsys
+}
+
+
+// Returns the subsystem name and remaining suffix based on a map of
+// prefixes to subsystem names.  Ensures that the returned suffix begins
+// with a '/' character.  Returns ("","") if there is no matching prefix.
+func subSystem(path string, subs map[string]string) (subsys, suff string) {
+	parts := strings.Split(path, "/")
 	e := len(parts)
 	for 1 < e {
 		e--
 		prefix := strings.Join(parts[0:e], "/") + "/"
-		if subsys := c.Subsystem[prefix]; "" != subsys {
-			return subsys
+		if subsys = subs[prefix]; "" != subsys {
+			suff = path[len(prefix):]
+			if '/' != suff[0] {
+				suff = "/" + suff
+			}
+			return
 		}
 	}
-	return ""
+	return "", ""
 }
 
 
