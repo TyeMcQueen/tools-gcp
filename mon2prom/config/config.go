@@ -41,6 +41,7 @@ type Selector struct {
 // a GCP MetricDescriptor plus the last part of the metric name to be used
 // in Prometheus (as computed so far).
 type MetricMatcher struct {
+	conf        Configuration
 	MD          *sd.MetricDescriptor
 	Name        string      // Last part of Prom metric name, so far.
 	// Metric kind; one of 'C', 'D', or 'G' for cumulative, delta, or gauge.
@@ -234,6 +235,7 @@ func LoadConfig(path string) Configuration {
 	}
 	lager.Debug().Map("Histogram limits", Config.Histogram)
 
+	configs[path] = conf
 	return *conf
 }
 
@@ -243,8 +245,18 @@ func init() {
 }
 
 
-func MatchMetric(md *sd.MetricDescriptor) *MetricMatcher {
+func MatchMetric(
+	md *sd.MetricDescriptor,
+	configFile ...string,
+) *MetricMatcher {
 	mm := new(MetricMatcher)
+	if 1 < len(configFile) {
+		panic("Passed more than one configFile to MatchMetric()")
+	} else if 1 == len(configFile) {
+		mm.conf = LoadConfig(configFile[0])
+	} else {
+		mm.conf = LoadConfig("")
+	}
 	mm.MD = md
 	mm.Kind, mm.Type, mm.Unit = mon.MetricAbbrs(md)
 	mm.Name = md.Type
