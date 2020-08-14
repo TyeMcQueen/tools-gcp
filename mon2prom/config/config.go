@@ -104,8 +104,27 @@ type Configuration struct {
 		Gauge       map[string]string
 	}
 
-	// Histogram is a mapping ...
-	Histogram   map[string]struct {
+	// Histogram is a list of rules for resampling histogram metrics to reduce
+	// the number of buckets or to simply ignore histogram metrics with too
+	// many buckets.  If MinBound, MinRatio, and MaxBound are all 0.0 (or
+	// missing), then they are ignored and only MaxBuckets applies.
+	//
+	// The rules are evaluated in the order listed and only the first
+	// matching rule (for each metric) is applied.
+	//
+	// Note that if the Unit element (above) specifies a scaling factor for
+	// this metric, then that scaling is applied to the bucket boundaries
+	// (and not the MinBound nor MaxBound) before any resampling is done.
+	Histogram   []struct {
+		// The For element specifies which metrics match this rule.  If
+		// missing (or empty), then the rule applies to all histogram metrics
+		// (except those already matched by a prior rule) -- this only makes
+		// sense for the last rule listed.
+		For         Selector
+		// MinBuckets specifies the minimum number of buckets needed for
+		// resampling to happen.  If there are fewer than MinBuckets buckets,
+		// then the buckets are not resampled and are preserved as-is.
+		MinBuckets  int
 		// MinBound specifies the minimum allowed bucket boundary.  If the
 		// first bucket boundary is below this value, then the lowest
 		// bucket boundary that is at least MinBound becomes the first
@@ -128,11 +147,11 @@ type Configuration struct {
 		// boundary is reached that is larger than MaxBound, then the prior
 		// kept bucket boundary becomes the last (largest) bucket boundary.
 		MaxBound    float64
+		// If the number of buckets (after resampling, if any was configured
+		// in this rule) is larger than MaxBuckets, then the metric is just
+		// ignored and will not be exported to Prometheus.
+		MaxBuckets  int
 	}
-
-	// If the number of buckets is large than MaxBuckets, then the metric is
-	// just ignored and will not be exported to Prometheus.
-	MaxBuckets  int
 
 	// OmitLabels specifies rules for identifying labels to be omitted from
 	// the metrics exported to Prometheus.  This is usually used to remove
@@ -229,17 +248,6 @@ func LoadConfig(path string) Configuration {
 	}
 	lager.Debug().Map("Loaded config", conf)
 
-	h := conf.Histogram
-	for k, v := range h {
-		if strings.Contains(k, ",") {
-			delete(h, k)
-			for _, key := range strings.Split(k, ",") {
-				h[key] = v
-			}
-		}
-	}
-	lager.Debug().Map("Histogram limits", Config.Histogram)
-
 	configs[path] = conf
 	return *conf
 }
@@ -316,16 +324,18 @@ func (mm *MetricMatcher) Scaler() ScalingFunc {
 }
 
 
-// Returns minBound, minRatio, and maxBound to use for histogram values when
-// using the passed-in units.  If nothing is configured then 0.0, 0.0, 0.0 is
-// returned.  Note that minBound and maxBound should be in the scaled (base)
-// units used in Prometheus, not the StackDriver units given by the passed-in
-// string.
-func (c Configuration) HistogramLimits(unit string) (
-	minBound, minRatio, maxBound float64,
+// Returns minBuckets, minBound, minRatio, maxBound, and maxBuckets to use for
+// histogram resampling for the given metric.
+func (mm *MetricMatcher) HistogramLimits() (
+	minBuckets int, minBound, minRatio, maxBound float64, maxBuckets int,
 ) {
-	h := c.Histogram[unit]
-	return h.MinBound, h.MinRatio, h.MaxBound
+	for _, s := range mm.conf.Histogram {
+		if ! mm.matches(s.For) {
+			continue
+		}
+		return s.MinBuckets, s.MinBound, s.MinRatio, s.MaxBound, s.MaxBuckets
+	}
+	return
 }
 
 

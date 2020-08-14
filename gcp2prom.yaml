@@ -21,11 +21,13 @@ unit:
   us:         /1000/1000
   ns:         /1000/1000/1000
 histogram:
-  s,ms,ns,us:
+  - for:
+      unit: s,ms,ns,us
+    minbuckets: 24
     minbound: 0.01
     minratio: 1.9
     maxbound: 500
-maxBuckets: 32
+  - maxbuckets: 32
 omitlabel:
   - for:
       prefix:

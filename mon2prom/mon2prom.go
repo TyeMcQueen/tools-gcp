@@ -118,7 +118,7 @@ func (pv *PromVector) addTimeSeriesDetails(
 	}
 
 	if dv := tss[0].Points[0].Value.DistributionValue; nil != dv {
-		return pv.resampleHist(dv)
+		return pv.resampleHist(matcher, dv)
 	} else if 'H' == pv.ValueType {
 		lager.Fail().Map(
 			"Histogram metric lacks DistributionValue", tss[0].Points[0])
@@ -128,62 +128,81 @@ func (pv *PromVector) addTimeSeriesDetails(
 
 
 func (pv *PromVector) resampleHist(
+	matcher *config.MetricMatcher,
 	dv      *sd.Distribution,
 ) bool {
-	if eb := dv.BucketOptions.ExponentialBuckets; nil != eb {
-		minBound, minRatio, maxBound := config.Config.
-			HistogramLimits(pv.MonDesc.Unit)
-		lager.Debug().Map("minBound", minBound,
-			"minRatio", minRatio, "maxBound", maxBound)
-		pv.BucketBounds, pv.SubBuckets = ExpBuckets(
-			eb,
-			'I' == pv.ValueType,
-			pv.scaler,
-			minBound, minRatio, maxBound,
-		)
-		lager.Debug().Map("bounds", pv.BucketBounds,
-			"subBuckets", pv.SubBuckets)
-		if nil == pv.BucketBounds {
-			lager.Fail().Map(
-				"Histogram has too many buckets", eb,
-				"For", pv.MonDesc.Type,
-				"Units", pv.MonDesc.Unit,
-			)
-			return false
-		}
+	minBuckets, minBound, minRatio, maxBound, maxBuckets :=
+		matcher.HistogramLimits()
+	lager.Debug().Map("minBuckets", minBuckets, "minBound", minBound,
+		"minRatio", minRatio, "maxBound", maxBound, "maxBuckets", maxBuckets)
+
+	var boundCount  int64
+	var firstBound  float64
+	var nextBound   func(float64) float64
+	if pb := dv.BucketOptions.ExponentialBuckets; nil != pb {
+		boundCount = 1 + pb.NumFiniteBuckets
+		firstBound = pb.Scale
+		nextBound = func(b float64) float64 { return b * pb.GrowthFactor }
+	} else if lb := dv.BucketOptions.LinearBuckets; nil != lb {
+		boundCount = 1 + lb.NumFiniteBuckets
+		firstBound = lb.Offset
+		nextBound = func(b float64) float64 { return b + lb.Width }
+	} else if eb := dv.BucketOptions.ExplicitBuckets; nil != eb {
+		boundCount = int64(len(eb.Bounds))
+		firstBound = eb.Bounds[0]
+		i := 0
+		nextBound = func(_ float64) float64 { i++; return eb.Bounds[i] }
 	} else {
-		lager.Exit().List("Haven't implemented non-exponential buckets")
+		lager.Fail().Map(
+			"Buckets were not exponential, linear, nor explicit for",
+			pv.MonDesc.Name, "Sample value", dv)
+		return false
+	}
+
+	if nil != pv.scaler {
+		firstBound = pv.scaler(firstBound)
+	}
+	pv.BucketBounds, pv.SubBuckets = combineBucketBoundaries(
+		boundCount, firstBound, nextBound,
+		'I' == pv.ValueType,
+		minBuckets, minBound, minRatio, maxBound,
+	)
+	lager.Debug().Map("bounds", pv.BucketBounds,
+		"subBuckets", pv.SubBuckets)
+
+	if 0 != maxBuckets && maxBuckets < len(pv.BucketBounds) {
+		lager.Fail().Map(
+			"Histogram has too many buckets", len(pv.BucketBounds),
+			"For", pv.MonDesc.Type, "Units", pv.MonDesc.Unit)
+		return false
 	}
 	return true
 }
 
 
-// Initializes the Prometheus histogram buckets based on a StackDriver
-// Exponential Distribution and an optional configuration meant to reduce
-// the number of buckets.
-func ExpBuckets(
-	exp         *sd.Exponential,
+// Initializes the Prometheus histogram buckets based on bucket boundaries
+// from a GCP metric and an optional configuration meant to reduce the number
+// of buckets.
+func combineBucketBoundaries(
+	boundCount  int64,
+	firstBound  float64,
+	nextBound   func(float64) float64,
 	isInt       bool,
-	scale       config.ScalingFunc,
+	minBuckets  int,
 	minBound,
 	minRatio,
 	maxBound    float64,
 ) ([]float64, []int) {
-	bound := exp.Scale
-	if nil != scale {
-		bound = scale(bound)
+	bound := firstBound
+	minNextBound := minBound
+	if minBound == maxBound {
+		minNextBound = firstBound   // Ignore minBound
 	}
-	nextBound := minBound
-	pow := exp.GrowthFactor
-	count := 1+exp.NumFiniteBuckets
-	bounds := make([]float64, count)
-	subBuckets := make([]int, count)
-	skip := false
-	if 32 < count {
-		if 0.0 == minRatio {
-			return nil, nil
-		}
-		skip = true
+	bounds := make([]float64, boundCount)
+	subBuckets := make([]int, boundCount)
+	resample := int64(minBuckets) < boundCount
+	if 0.0 == minRatio {
+		minRatio = 1.0
 	}
 	o := 0
 	for _, _ = range subBuckets {
@@ -195,15 +214,16 @@ func ExpBuckets(
 			}
 			newBound = float64(trunc)
 		}
-		if !skip || nextBound <= bound && bound <= maxBound {
+		if !resample || minNextBound <= bound &&
+		   ( minBound == maxBound || bound <= maxBound ) {
 			bounds[o] = newBound
 			subBuckets[o]++
 			o++
-			nextBound = bound * minRatio
+			minNextBound = bound * minRatio
 		} else {
 			subBuckets[o]++
 		}
-		bound *= pow
+		bound = nextBound(bound)
 	}
 	return bounds[:o], subBuckets[:o+1]
 }
