@@ -63,7 +63,7 @@ func basicPromVec(
 	md          *sd.MetricDescriptor,
 ) *PromVector {
 	pv := PromVector{}
-	subsys := config.Config.Subsystem(md.Type)
+	subsys := config.Config.GetSubsystem(md.Type)
 	if "" == subsys {
 		lager.Warn().Map("Ignoring metric lacking subsystem", md.Type)
 		return nil

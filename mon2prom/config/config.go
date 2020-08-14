@@ -53,13 +53,13 @@ type MetricMatcher struct {
 	Unit        string
 }
 
-// This type specifies what data can be put in the gcp2prom.yaml
+// The Configuration type specifies what data can be put in the gcp2prom.yaml
 // configuration file to control which GCP metrics can be exported to
 // Prometheus and to configure how each gets converted.
 //
 // Note that YAML lowercases the letters of keys so, for example, to set
 // MaxBuckets, your YAML would contain something like `maxbuckets: 32`.
-type config struct {
+type Configuration struct {
 	// System is the first part of each Prometheus metric name.
 	System      string
 
@@ -141,16 +141,18 @@ type config struct {
 	}
 }
 
-
-type conf struct { config }
-
 type ScalingFunc func(float64) float64
 
 
 //// Global Variables ////
 
-// The global configuration loaded from gcp2prom.yaml.
-var Config conf
+var ConfigFile = "gcp2prom.yaml"
+
+// Map from config file path to loaded Configuration
+var configs = make(map[string]*Configuration)
+
+// The global configuration loaded from gcp2prom.yaml (deprecated).
+var Config Configuration
 
 var Scale = map[string]ScalingFunc{
 	"*1024*1024*1024":  multiply( 1024.0*1024.0*1024.0 ),
@@ -199,18 +201,29 @@ func commaSeparated(list string, nilForSingle bool) []string {
 }
 
 
-func init() {
-	r, err := os.Open("gcp2prom.yaml")
+func LoadConfig(path string) Configuration {
+	if "" == path {
+		path = ConfigFile
+	}
+
+	conf := configs[path]
+	if nil != conf {
+		return *conf
+	}
+	conf = new(Configuration)
+
+	r, err := os.Open(path)
 	if nil != err {
-		lager.Exit().Map("Can't read gcp2prom.yaml", err)
+		lager.Exit().Map("Can't read", path, "Error", err)
 	}
 	y := yaml.NewDecoder(r)
-	err = y.Decode(&Config.config)
+	err = y.Decode(conf)
 	if nil != err {
-		lager.Exit().Map("Invalid yaml in gcp2prom.yaml", err)
+		lager.Exit().Map("Invalid yaml", err, "In", path)
 	}
-	lager.Debug().Map("Loaded config", Config.config)
-	h := Config.config.Histogram
+	lager.Debug().Map("Loaded config", conf)
+
+	h := conf.Histogram
 	for k, v := range h {
 		if strings.Contains(k, ",") {
 			delete(h, k)
@@ -219,7 +232,14 @@ func init() {
 			}
 		}
 	}
-	lager.Debug().Map("Histogram limits", Config.config.Histogram)
+	lager.Debug().Map("Histogram limits", Config.Histogram)
+
+	return *conf
+}
+
+
+func init() {
+	Config = LoadConfig("")
 }
 
 
@@ -232,9 +252,24 @@ func MatchMetric(md *sd.MetricDescriptor) *MetricMatcher {
 }
 
 
+// Returns the configured subsystem name for this metric type.
+func (c Configuration) GetSubsystem(metricType string) string {
+	parts := strings.Split(metricType, "/")
+	e := len(parts)
+	for 1 < e {
+		e--
+		prefix := strings.Join(parts[0:e], "/") + "/"
+		if subsys := c.Subsystem[prefix]; "" != subsys {
+			return subsys
+		}
+	}
+	return ""
+}
+
+
 // Returns `nil` or a function that scales float64 values from the units
 // used in StackDriver to the base units that are preferred in Prometheus.
-func (c conf) Scaler(unit string) ScalingFunc {
+func (c Configuration) Scaler(unit string) ScalingFunc {
 	key := c.Unit[unit]
 	if "" == key {
 		return nil
@@ -247,27 +282,12 @@ func (c conf) Scaler(unit string) ScalingFunc {
 }
 
 
-// Returns the configured subsystem name for this metric type.
-func (c conf) Subsystem(metricType string) string {
-	parts := strings.Split(metricType, "/")
-	e := len(parts)
-	for 1 < e {
-		e--
-		prefix := strings.Join(parts[0:e], "/") + "/"
-		if subsys := c.config.Subsystem[prefix]; "" != subsys {
-			return subsys
-		}
-	}
-	return ""
-}
-
-
 // Returns minBound, minRatio, and maxBound to use for histogram values when
 // using the passed-in units.  If nothing is configured then 0.0, 0.0, 0.0 is
 // returned.  Note that minBound and maxBound should be in the scaled (base)
 // units used in Prometheus, not the StackDriver units given by the passed-in
 // string.
-func (c conf) HistogramLimits(unit string) (
+func (c Configuration) HistogramLimits(unit string) (
 	minBound, minRatio, maxBound float64,
 ) {
 	h := c.Histogram[unit]
@@ -329,7 +349,7 @@ func (mm *MetricMatcher) matches(s Selector) bool {
 
 // Returns the full metric name to use in Prometheus for the metric from
 // StackDriver having the passed-in path, kind, and value type.
-func (c conf) MetricName(path string, metricKind, valueType byte) string {
+func (c Configuration) MetricName(path string, metricKind, valueType byte) string {
 	for k, v := range c.Suffix.Any {
 		if strings.HasSuffix(path, k) {
 			path = path[0:len(path)-len(k)] + v
@@ -367,11 +387,11 @@ func Contains(set string, k, t byte) bool {
 
 // Returns the label names to be dropped when exporting the passed-in
 // StackDriver metric to Prometheus.
-func (c conf) OmitLabels(md *sd.MetricDescriptor) []string {
+func (c Configuration) OmitLabels(md *sd.MetricDescriptor) []string {
 	labels := make([]string, 0)
 	k, t, u := mon.MetricAbbrs(md)
 	path := md.Type
-	for _, spec := range c.config.OmitLabel {
+	for _, spec := range c.OmitLabel {
 		if "" != spec.Prefix && !strings.HasPrefix(path, spec.Prefix) ||
 		   "" != spec.Suffix && !strings.HasSuffix(path, spec.Suffix) ||
 		   "" != spec.Only && !Contains(spec.Only, k, t) ||
