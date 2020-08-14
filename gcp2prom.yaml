@@ -36,27 +36,34 @@ omitlabel:
       unit: ms
     labels: [ proxy_continent, client_country ]
 suffix:
-  any:
-    /total_latencies:         /combined_latencies
-    /open_connections:        /current_connections
-    /port_usage:              /ports_used_count
-    /bytes_ingested:          /ingested_bytes
-    /monthly_bytes_ingested:  /month_to_date_ingested_bytes
-    /max_rate:                /max_requests_per_second
-    /max_utilization:         /max_utilization_ratio
-    /utilization:             /utilization_ratio
-    /nat_allocation_failed:   /nat_allocation_failed_bytes
-    /uploaded_bytes_billed:   /billed_uploaded_bytes
-  histogram:
-    _latencies:       _latency_seconds
-    rtt:              rtt_seconds
-  counter:
-    s_count:          s_total
-    row_count:        rows_total
-    entry_count:      entries_total
-    byte_count:       bytes_total
-    request_count:    requests_total
-    _connections:     _connections_total
-  gauge:
-    instance_group/size:  instance_count
-    allocation/usage:     quota_usage
+  - replace:
+      /total_latencies:         /combined_latencies
+      /open_connections:        /current_connections
+      /port_usage:              /ports_used_count
+      /bytes_ingested:          /ingested_bytes
+      /monthly_bytes_ingested:  /month_to_date_ingested_bytes
+      /max_rate:                /max_requests_per_second
+      /max_utilization:         /max_utilization_ratio
+      /utilization:             /utilization_ratio
+      /uploaded_bytes_billed:   /billed_uploaded_bytes
+  - for:
+      prefix:
+        - loadbal
+      only: H
+    replace:
+      _latencies:       _latency_seconds
+      rtt:              rtt_seconds
+  - for:
+      only: C
+    replace:
+      s_count:                  s_total
+      row_count:                rows_total
+      entry_count:              entries_total
+      byte_count:               bytes_total
+      request_count:            requests_total
+      _connections:             _connections_total
+  - for:
+      only: G
+    replace:
+      instance_group/size:  instances_count
+      allocation/usage:     quota_usage

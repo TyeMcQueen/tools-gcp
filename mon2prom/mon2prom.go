@@ -76,8 +76,7 @@ func basicPromVec(
 		lager.Warn().Map("Ignoring Histogram Gauge", md.Type)
 		return nil, nil
 	}
-	pv.PromName = config.Config.System + "_" + matcher.SubSys + "_" +
-		config.Config.MetricName(pv.MonDesc.Type, pv.MetricKind, pv.ValueType)
+	pv.PromName = matcher.PromName()
 	return &pv, matcher
 }
 

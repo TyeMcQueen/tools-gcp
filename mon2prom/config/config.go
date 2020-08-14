@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -93,15 +94,21 @@ type Configuration struct {
 	// entries that will be applied to a metric will be "random".
 	Unit        map[string]string
 
-	// Suffix adjusts the last part of Prometheus
-	// metric names by replacing a suffix.
+	// Suffix is a list of rules for adjusting the last part of Prometheus
+	// metric names by replacing a suffix.  Rules are applied in the order
+	// listed.  The For element determines which rules apply to which metrics.
 	//
-	// For each section, only the longest matching suffix is applied.
-	Suffix      struct {
-		Any         map[string]string
-		Histogram   map[string]string
-		Counter     map[string]string
-		Gauge       map[string]string
+	// For each rule, only the longest matching suffix is applied.  If a
+	// metric matches the For element of multiple rules, then multiple rules
+	// will be applied (in the order that they are listed) to that metric.
+	//
+	// A '/' character is prepended to the last part of the Prometheus name
+	// before comparing it to each Replace key so you can use a key like
+	// "/port_usage" to match (and replace) the whole name, not just a suffix.
+	Suffix      []*struct {
+		For     Selector            // Selects which metrics to rename.
+		Replace map[string]string   // Key is suffix to be replaced with value.
+		keys    []string            // Keys from Replace, longest to shortest.
 	}
 
 	// Histogram is a list of rules for resampling histogram metrics to reduce
@@ -201,6 +208,27 @@ func divide(d float64) ScalingFunc {
 }
 
 
+type LongestFirst []string
+func (p LongestFirst) Len() int             { return len(p) }
+func (p LongestFirst) Less(i, j int) bool   { return len(p[i]) > len(p[j]) }
+func (p LongestFirst) Swap(i, j int)        { p[i], p[j] = p[j], p[i] }
+
+func longestFirst(strs []string) {
+	sort.Sort(LongestFirst(strs))
+}
+
+func longestKeysFirst(m map[string]string) []string {
+	strs := make([]string, len(m))
+	o := 0
+	for k, _ := range m {
+		strs[o] = k
+		o++
+	}
+	longestFirst(strs)
+	return strs
+}
+
+
 func commaSeparated(list string, nilForSingle bool) []string {
 	if ! strings.Contains(list, ",") {
 		if nilForSingle {
@@ -247,6 +275,10 @@ func LoadConfig(path string) Configuration {
 		lager.Exit().Map("Invalid yaml", err, "In", path)
 	}
 	lager.Debug().Map("Loaded config", conf)
+
+	for _, suf := range conf.Suffix {
+		suf.keys = longestKeysFirst(suf.Replace)
+	}
 
 	u := conf.Unit
 	for k, v := range u {
@@ -300,6 +332,7 @@ func MatchMetric(
 	if "" == mm.SubSys {
 		return nil
 	}
+	mm.computeName()
 	return mm
 }
 
@@ -322,6 +355,41 @@ func subSystem(path string, subs map[string]string) (subsys, suff string) {
 		}
 	}
 	return "", ""
+}
+
+
+var notAllowed = regexp.MustCompile("[^a-zA-Z0-9_]+")
+
+// Iterates over Configuration.Suffix rules to successively replace suffixes
+// of the metric name to get the final Prometheus metric name.
+func (mm *MetricMatcher) computeName() {
+	for _, s := range mm.conf.Suffix {
+		if ! mm.matches(s.For) {
+			continue
+		}
+		for _, k := range s.keys {
+			if strings.HasSuffix(mm.Name, k) {
+				mm.Name = mm.Name[0:len(mm.Name)-len(k)] + s.Replace[k]
+				if '/' != mm.Name[0] {
+					mm.Name = "/" + mm.Name
+				}
+				break
+			}
+		}
+	}
+
+	o := 0
+	for '/' == mm.Name[o] {
+		o++
+	}
+	mm.Name = notAllowed.ReplaceAllString(mm.Name[o:], "_")
+	mm.SubSys = notAllowed.ReplaceAllString(mm.SubSys, "_")
+}
+
+
+// Returns the full metric name to use in Prometheus.
+func (mm *MetricMatcher) PromName() string {
+	return mm.conf.System + "_" + mm.SubSys + "_" + mm.Name
 }
 
 
@@ -404,37 +472,6 @@ func (mm *MetricMatcher) matches(s Selector) bool {
 	}
 
 	return true
-}
-
-
-// Returns the full metric name to use in Prometheus for the metric from
-// StackDriver having the passed-in path, kind, and value type.
-func (c Configuration) MetricName(path string, metricKind, valueType byte) string {
-	for k, v := range c.Suffix.Any {
-		if strings.HasSuffix(path, k) {
-			path = path[0:len(path)-len(k)] + v
-		}
-	}
-	var h map[string]string
-	if 'H' == valueType {
-		h = c.Suffix.Histogram
-	} else if 'C' == metricKind || 'D' == metricKind {
-		h = c.Suffix.Counter
-	} else if 'G' == metricKind {
-		h = c.Suffix.Gauge
-	} else {
-		lager.Panic().Map(
-			"ValueType is not H", []byte{valueType},
-			"MetricKind is no C nor G", []byte{metricKind},
-		)
-	}
-	for k, v := range h {
-		if strings.HasSuffix(path, k) {
-			path = path[0:len(path)-len(k)] + v
-		}
-	}
-	parts := strings.Split(path, "/")
-	return parts[len(parts)-1]
 }
 
 
