@@ -248,6 +248,22 @@ func LoadConfig(path string) Configuration {
 	}
 	lager.Debug().Map("Loaded config", conf)
 
+	u := conf.Unit
+	for k, v := range u {
+		if items := commaSeparated(k, true); nil != items {
+			delete(u, k)
+			for _, key := range items {
+				if _, ok := u[key]; ok {
+					lager.Warn().Map(".units has duplicate unit spec", key,
+						"including in", k)
+				} else {
+					u[key] = v
+				}
+			}
+		}
+	}
+	lager.Debug().Map("Expanded units scaling", conf.Unit)
+
 	configs[path] = conf
 	return *conf
 }
