@@ -222,6 +222,7 @@ func LoadConfig(path string) Configuration {
 		lager.Exit().Map("Can't read", path, "Error", err)
 	}
 	y := yaml.NewDecoder(r)
+	y.SetStrict(true)
 	err = y.Decode(conf)
 	if nil != err {
 		lager.Exit().Map("Invalid yaml", err, "In", path)
