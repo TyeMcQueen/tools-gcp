@@ -57,35 +57,36 @@ func MetricFetcher(monClient mon.Client) (chan<- *PromVector, func()) {
 
 
 // Creates a PromVector and partially initializes it based just on a
-// MetricDescriptor.  Returns `nil` if the metric cannot be exported.
+// MetricDescriptor.  Returns `nil`s if the metric cannot be exported.
 func basicPromVec(
 	projectID   string,
 	md          *sd.MetricDescriptor,
-) *PromVector {
+) (*PromVector, *config.MetricMatcher) {
 	pv := PromVector{}
-	match := config.MatchMetric(md)
-	if nil == match {
-		return nil
+	matcher := config.MatchMetric(md)
+	if nil == matcher {
+		return nil, nil
 	}
 	pv.ProjectID = projectID
 	pv.MonDesc = md
-	pv.MetricKind = match.Kind
-	pv.ValueType = match.Type
-	pv.scaler = match.Scaler()
+	pv.MetricKind = matcher.Kind
+	pv.ValueType = matcher.Type
+	pv.scaler = matcher.Scaler()
 	if 'H' == pv.ValueType && 'G' == pv.MetricKind {
 		lager.Warn().Map("Ignoring Histogram Gauge", md.Type)
-		return nil
+		return nil, nil
 	}
-	pv.PromName = config.Config.System + "_" + match.SubSys + "_" +
+	pv.PromName = config.Config.System + "_" + matcher.SubSys + "_" +
 		config.Config.MetricName(pv.MonDesc.Type, pv.MetricKind, pv.ValueType)
-	return &pv
+	return &pv, matcher
 }
 
 
 // Finishes initializing the PromVector using recent values from the source
 // time series.  Returns `false` if the metric cannot be exported.
 func (pv *PromVector) addTimeSeriesDetails(
-	tss []*sd.TimeSeries,
+	matcher *config.MetricMatcher,
+	tss     []*sd.TimeSeries,
 ) bool {
 	hasProjectID := false
 	resourceKeys := make(map[string]bool)
@@ -100,7 +101,7 @@ func (pv *PromVector) addTimeSeriesDetails(
 	lager.Debug().Map("For", pv.PromName,
 		"Labels", pv.MonDesc.Labels, "Resource keys", resourceKeys)
 
-	pv.Set.Init(pv.OmitLabels(), pv.MonDesc.Labels, resourceKeys)
+	pv.Set.Init(matcher.OmitLabels(), pv.MonDesc.Labels, resourceKeys)
 	constLabels := prom.Labels{}
 	if !hasProjectID {
 		constLabels = prom.Labels{"project_id": pv.ProjectID}
@@ -154,13 +155,6 @@ func (pv *PromVector) resampleHist(
 		lager.Exit().List("Haven't implemented non-exponential buckets")
 	}
 	return true
-}
-
-
-// Looks up the label names to be ignored based on the PromVector's
-// MetricDescriptor.
-func (pv *PromVector) OmitLabels() []string {
-	return config.Config.OmitLabels(pv.MonDesc)
 }
 
 
@@ -224,7 +218,7 @@ func NewVec(
 	md          *sd.MetricDescriptor,
 	ch          chan<- *PromVector,
 ) *PromVector {
-	pv := basicPromVec(projectID, md)
+	pv, matcher := basicPromVec(projectID, md)
 	if nil == pv {
 		return nil
 	}
@@ -235,7 +229,7 @@ func NewVec(
 	) {
 		tss = append(tss, ts)
 	}
-	if ! pv.addTimeSeriesDetails(tss) {
+	if ! pv.addTimeSeriesDetails(matcher, tss) {
 		return nil
 	}
 

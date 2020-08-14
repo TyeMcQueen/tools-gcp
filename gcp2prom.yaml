@@ -27,10 +27,12 @@ histogram:
     maxbound: 500
 maxBuckets: 32
 omitlabel:
-  - labels: [proxy_continent, client_country]
-    prefix: loadbal
-    only: H
-    unit: ms
+  - for:
+      prefix:
+        - loadbal
+      only: H
+      unit: ms
+    labels: [ proxy_continent, client_country ]
 suffix:
   any:
     /total_latencies:         /combined_latencies

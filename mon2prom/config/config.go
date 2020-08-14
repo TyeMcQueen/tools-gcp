@@ -141,12 +141,8 @@ type Configuration struct {
 	// If a metric matches more than one rule, then any labels mentioned in
 	// any of the matching rules will be omitted.
 	OmitLabel   []struct {
-		Labels  []string
-		Prefix  string
-		Suffix  string
-		Only    string
-		Not     string
-		Unit    string
+		For     Selector    // Selects which metrics to check.
+		Labels  []string    // The list of metric labels to ignore.
 	}
 }
 
@@ -424,19 +420,12 @@ func Contains(set string, k, t byte) bool {
 
 // Returns the label names to be dropped when exporting the passed-in
 // StackDriver metric to Prometheus.
-func (c Configuration) OmitLabels(md *sd.MetricDescriptor) []string {
+func (mm *MetricMatcher) OmitLabels() []string {
 	labels := make([]string, 0)
-	k, t, u := mon.MetricAbbrs(md)
-	path := md.Type
-	for _, spec := range c.OmitLabel {
-		if "" != spec.Prefix && !strings.HasPrefix(path, spec.Prefix) ||
-		   "" != spec.Suffix && !strings.HasSuffix(path, spec.Suffix) ||
-		   "" != spec.Only && !Contains(spec.Only, k, t) ||
-		   "" != spec.Not && Contains(spec.Not, k, t) ||
-		   "" != spec.Unit && u != spec.Unit {
-			continue
+	for _, s := range mm.conf.OmitLabel {
+		if mm.matches(s.For) {
+			labels = append(labels, s.Labels...)
 		}
-		labels = append(labels, spec.Labels...)
 	}
 	return labels
 }
