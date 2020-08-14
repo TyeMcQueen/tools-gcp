@@ -63,27 +63,20 @@ func basicPromVec(
 	md          *sd.MetricDescriptor,
 ) *PromVector {
 	pv := PromVector{}
-	subsys := config.Config.GetSubsystem(md.Type)
-	if "" == subsys {
-		lager.Warn().Map("Ignoring metric lacking subsystem", md.Type)
+	match := config.MatchMetric(md)
+	if nil == match {
 		return nil
 	}
 	pv.ProjectID = projectID
 	pv.MonDesc = md
-	pv.MetricKind = md.MetricKind[0]
-	pv.ValueType = md.ValueType[0]
-	pv.scaler = config.Config.Scaler(pv.MonDesc.Unit)
-	if 'D' == pv.ValueType {
-		switch md.ValueType[1] {
-			case 'O': pv.ValueType = 'F'    // DOuble -> Float
-			case 'I': pv.ValueType = 'H'    // DIstribution -> Histogram
-		}
-	}
+	pv.MetricKind = match.Kind
+	pv.ValueType = match.Type
+	pv.scaler = match.Scaler()
 	if 'H' == pv.ValueType && 'G' == pv.MetricKind {
 		lager.Warn().Map("Ignoring Histogram Gauge", md.Type)
 		return nil
 	}
-	pv.PromName = config.Config.System + "_" + subsys + "_" +
+	pv.PromName = config.Config.System + "_" + match.SubSys + "_" +
 		config.Config.MetricName(pv.MonDesc.Type, pv.MetricKind, pv.ValueType)
 	return &pv
 }

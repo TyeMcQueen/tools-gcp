@@ -283,13 +283,6 @@ func MatchMetric(
 }
 
 
-// Returns the configured subsystem name for this metric type.
-func (c Configuration) GetSubsystem(metricType string) string {
-	subsys, suff := subSystem(metricType, c.Subsystem)
-	return subsys
-}
-
-
 // Returns the subsystem name and remaining suffix based on a map of
 // prefixes to subsystem names.  Ensures that the returned suffix begins
 // with a '/' character.  Returns ("","") if there is no matching prefix.
@@ -313,14 +306,14 @@ func subSystem(path string, subs map[string]string) (subsys, suff string) {
 
 // Returns `nil` or a function that scales float64 values from the units
 // used in StackDriver to the base units that are preferred in Prometheus.
-func (c Configuration) Scaler(unit string) ScalingFunc {
-	key := c.Unit[unit]
+func (mm *MetricMatcher) Scaler() ScalingFunc {
+	key := mm.conf.Unit[mm.Unit]
 	if "" == key {
 		return nil
 	}
 	f, ok := Scale[key]
 	if !ok {
-		lager.Exit().Map("Unrecognized scale key", key, "For unit type", unit)
+		lager.Exit().Map("Unrecognized scale key", key, "For unit", mm.Unit)
 	}
 	return f
 }
