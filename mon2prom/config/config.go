@@ -298,6 +298,46 @@ func LoadConfig(path string) Configuration {
 }
 
 
+// Returns the list of prefixes to GCP metrics that could be handled.
+func GcpPrefixes(configFile ...string) []string {
+	var conf Configuration
+	if 1 < len(configFile) {
+		panic("Passed more than one configFile to GcpPrefixes()")
+	} else if 1 == len(configFile) {
+		conf = LoadConfig(configFile[0])
+	} else {
+		conf = LoadConfig("")
+	}
+
+	return uniqueKeyPrefixes(conf.Subsystem)
+}
+
+
+// Returns the keys that don't have a shorter prefix as another key.  All
+// keys are expected to end in '/'.
+func uniqueKeyPrefixes(m map[string]string) []string {
+	prefixes := make([]string, len(m))
+	o := 0
+	for pref, _ := range m {
+		parts := strings.Split(pref, "/")
+		e := len(parts) - 1
+		dup := false
+		for 1 < e {
+			e--
+			shorter := strings.Join(parts[0:e], "/") + "/"
+			if _, dup = m[shorter]; dup {
+				break
+			}
+		}
+		if ! dup {
+			prefixes[o] = pref
+			o++
+		}
+	}
+	return prefixes[:o]
+}
+
+
 // Constructs a MetricMatcher for the given GCP MetricDescriptor.  If a second
 // argument is passed, it should be a string holding the path to a YAML file
 // containing the configuration to be used for exporting the metric to
