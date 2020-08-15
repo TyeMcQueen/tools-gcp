@@ -6,9 +6,11 @@ subsystem:
   loadbalancing.googleapis.com/l3/external/:    lb_l3
   loadbalancing.googleapis.com/l3/internal/:    ilb_l3
   loadbalancing.googleapis.com/tcp_ssl_proxy/:  tcp_ssl_proxy
+  bigquery.googleapis.com/job/:                 bigquery_job
   bigquery.googleapis.com/query/:               bigquery_query
   bigquery.googleapis.com/slots/:               bigquery_slot
   bigquery.googleapis.com/storage/:             bigquery_store
+  router.googleapis.com/nat/:                   cloud_nat
 unit:
   "10^2.%":   /100
   "%":        /100
@@ -62,8 +64,10 @@ suffix:
       byte_count:               bytes_total
       request_count:            requests_total
       _connections:             _connections_total
+      nat_allocation_failed:    allocation_failed
   - for:
       only: G
     replace:
       instance_group/size:  instances_count
       allocation/usage:     quota_usage
+      port_usage:           used_ports
