@@ -182,9 +182,6 @@ var ConfigFile = "gcp2prom.yaml"
 // Map from config file path to loaded Configuration
 var configs = make(map[string]*Configuration)
 
-// The global configuration loaded from gcp2prom.yaml (deprecated).
-var Config Configuration
-
 var Scale = map[string]ScalingFunc{
 	"*1024*1024*1024":  multiply( 1024.0*1024.0*1024.0 ),
 	"*1024*1024":       multiply( 1024.0*1024.0 ),
@@ -298,11 +295,6 @@ func LoadConfig(path string) Configuration {
 
 	configs[path] = conf
 	return *conf
-}
-
-
-func init() {
-	Config = LoadConfig("")
 }
 
 
