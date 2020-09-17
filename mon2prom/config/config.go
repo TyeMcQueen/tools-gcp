@@ -410,18 +410,15 @@ func (mm *MetricMatcher) computeName() {
 		}
 	}
 
-	o := 0
-	for '/' == mm.Name[o] {
-		o++
-	}
-	mm.Name = notAllowed.ReplaceAllString(mm.Name[o:], "_")
+	mm.Name = "/" + notAllowed.ReplaceAllString(mm.Name[1:], "_")
 	mm.SubSys = notAllowed.ReplaceAllString(mm.SubSys, "_")
 }
 
 
 // Returns the full metric name to use in Prometheus.
 func (mm *MetricMatcher) PromName() string {
-	return mm.conf.System + "_" + mm.SubSys + "_" + mm.Name
+	// Skip the '/' at front of mm.Name:
+	return mm.conf.System + "_" + mm.SubSys + "_" + mm.Name[1:]
 }
 
 
