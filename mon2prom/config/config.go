@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"sort"
@@ -250,26 +251,26 @@ func commaSeparated(list string, nilForSingle bool) []string {
 }
 
 
-func LoadConfig(path string) Configuration {
+func LoadConfig(path string) (Configuration, error) {
 	if "" == path {
 		path = ConfigFile
 	}
 
 	conf := configs[path]
 	if nil != conf {
-		return *conf
+		return *conf, nil
 	}
 	conf = new(Configuration)
 
 	r, err := os.Open(path)
 	if nil != err {
-		lager.Exit().Map("Can't read", path, "Error", err)
+		return *conf, err
 	}
 	y := yaml.NewDecoder(r)
 	y.SetStrict(true)
 	err = y.Decode(conf)
 	if nil != err {
-		lager.Exit().Map("Invalid yaml", err, "In", path)
+		return *conf, fmt.Errorf("Invalid yaml in %s: %v", path, err)
 	}
 	lager.Debug().Map("Loaded config", conf)
 
@@ -294,22 +295,22 @@ func LoadConfig(path string) Configuration {
 	lager.Debug().Map("Expanded units scaling", conf.Unit)
 
 	configs[path] = conf
-	return *conf
+	return *conf, nil
+}
+
+
+func MustLoadConfig(path string) Configuration {
+	conf, err := LoadConfig(path)
+	if nil != err {
+		lager.Exit().Map("Failed to load gcp2prom config", err)
+	}
+	return conf
 }
 
 
 // Returns the list of prefixes to GCP metrics that could be handled.
-func GcpPrefixes(configFile ...string) []string {
-	var conf Configuration
-	if 1 < len(configFile) {
-		panic("Passed more than one configFile to GcpPrefixes()")
-	} else if 1 == len(configFile) {
-		conf = LoadConfig(configFile[0])
-	} else {
-		conf = LoadConfig("")
-	}
-
-	return uniqueKeyPrefixes(conf.Subsystem)
+func(c Configuration) GcpPrefixes() []string {
+	return uniqueKeyPrefixes(c.Subsystem)
 }
 
 
@@ -346,18 +347,9 @@ func uniqueKeyPrefixes(m map[string]string) []string {
 // Returns `nil` if the metric is not one that can be exported to Prometheus
 // based on the configuration chosen (because no Subsystem has been configured
 // for it).
-func MatchMetric(
-	md *sd.MetricDescriptor,
-	configFile ...string,
-) *MetricMatcher {
+func(c Configuration) MatchMetric(md *sd.MetricDescriptor) *MetricMatcher {
 	mm := new(MetricMatcher)
-	if 1 < len(configFile) {
-		panic("Passed more than one configFile to MatchMetric()")
-	} else if 1 == len(configFile) {
-		mm.conf = LoadConfig(configFile[0])
-	} else {
-		mm.conf = LoadConfig("")
-	}
+	mm.conf = c
 	mm.MD = md
 	mm.Kind, mm.Type, mm.Unit = mon.MetricAbbrs(md)
 	mm.SubSys, mm.Name = subSystem(md.Type, mm.conf.Subsystem)

@@ -63,7 +63,7 @@ func basicPromVec(
 	md          *sd.MetricDescriptor,
 ) (*PromVector, *config.MetricMatcher) {
 	pv := PromVector{}
-	matcher := config.MatchMetric(md)
+	matcher := config.MustLoadConfig("").MatchMetric(md)
 	if nil == matcher {
 		return nil, nil
 	}

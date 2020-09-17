@@ -22,7 +22,7 @@ func main() {
 	proj := conn.DefaultProjectId()
 	ch, runner := mon2prom.MetricFetcher(monClient)
 	count := 0
-	for _, pref := range config.GcpPrefixes() {
+	for _, pref := range config.MustLoadConfig("").GcpPrefixes() {
 		for md := range monClient.StreamMetricDescs(nil, proj, pref) {
 			if nil != mon2prom.NewVec(proj, monClient, md, ch) {
 				count++
