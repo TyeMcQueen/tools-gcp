@@ -33,8 +33,12 @@ func DefaultProjectId() string {
 		)
 		if nil == err {
 			projectID = creds.ProjectID
+			lager.Info().Map("GCP ProjectID from default creds", projectID)
 		} else {
 			projectID = GcloudDefaultProject()
+			if "" != projectID {
+				lager.Info().Map("GCP ProjectID from gcloud", projectID)
+			}
 		}
 	}
 	return projectID
