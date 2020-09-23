@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/TyeMcQueen/go-tutl"
 	"github.com/TyeMcQueen/tools-gcp/conn"
 	"github.com/TyeMcQueen/tools-gcp/display"
+	"github.com/TyeMcQueen/tools-gcp/mon"
 	"google.golang.org/api/monitoring/v3"
 )
 
@@ -42,7 +44,7 @@ var Depth = pflag.IntP("depth", "d", 0,
 
 
 func usage() {
-	fmt.Println(Join("\n",
+	fmt.Println(display.Join("\n",
 	"gcp-metrics [-qejvhbc] [-[mudon]=...] [project-id]",
 	"  By default, shows which GCP metrics are not empty.",
 	"  Every option can be abbreviated to its first letter.",
@@ -121,10 +123,10 @@ func DescribeMetric(
 	}
 	if *WithBuckets && nil != buckets {
 		fmt.Printf("    %s", bType)
-		DumpJson("", buckets)
+		display.DumpJson("", buckets)
 	}
 	if *WithHelp {
-		fmt.Printf("    %s\n", WrapText(md.Description))
+		fmt.Printf("    %s\n", display.WrapText(md.Description))
 	}
 }
 
@@ -155,7 +157,7 @@ func ShowMetric(
 		if !*Quiet {
 			parts := strings.Split(md.Type, "/")
 			fmt.Printf("... %s/%s\r",
-				Join("/", parts[0:len(parts)-1]...), eol)
+				display.Join("/", parts[0:len(parts)-1]...), eol)
 		}
 	}
 	count = 0
@@ -169,7 +171,7 @@ func ShowMetric(
 					if 1 < len(ts.Points) {
 						ts.Points = ts.Points[0:1]
 					}
-					DumpJson("", ts)
+					display.DumpJson("", ts)
 				} else if 1 == count && 'H' == t {
 					bucketType, buckets = display.BucketInfo(ts.Points[0].Value)
 				}
@@ -182,7 +184,7 @@ func ShowMetric(
 			fmt.Printf("%s%s\n", prefix, eol)
 		}
 	} else if *AsJson {
-		DumpJson("  ", md)
+		display.DumpJson("  ", md)
 	} else if ! *ShowValues {
 		DescribeMetric(count, md, k, t, u, bucketType, buckets, eol)
 	}
