@@ -7,12 +7,37 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"google.golang.org/api/monitoring/v3"
 )
 
 
 func Join(sep string, strs ...string) string { return strings.Join(strs, sep) }
+
+
+func DurationString(d time.Duration) string {
+	type u struct { suf string; dur time.Duration}
+	if d == time.Duration(0) {
+		return "0"
+	}
+	for _, unit := range ([]u{
+		u{"d", 24*time.Hour},
+		u{"h", time.Hour},
+		u{"m", time.Minute},
+		u{"s", time.Second},
+		u{"ms", time.Millisecond},
+		u{"us", time.Microsecond},
+	}) {
+		if 0 == d % unit.dur {
+			return fmt.Sprintf("%d%s", d/unit.dur, unit.suf)
+		} else if 2*unit.dur <= d {
+			return fmt.Sprintf("%.2f%s",
+				float64(d)/float64(unit.dur), unit.suf)
+		}
+	}
+	return fmt.Sprintf("%dns", d)
+}
 
 
 func DumpJson(indent string, ix interface{}) {

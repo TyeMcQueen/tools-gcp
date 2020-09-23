@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/TyeMcQueen/go-tutl"
@@ -110,14 +109,14 @@ func DescribeMetric(
 	eol     string,
 ) {
 	if *AlsoEmpty && ! *WithCount {
-		fmt.Printf("%c%c %s %s %d+%d%s\n", k, t, md.Type, u,
-			mon.IngestDelay(md)/time.Second,
-			mon.SamplePeriod(md)/time.Second, eol)
+		fmt.Printf("%c%c %s %s %s+%s%s\n", k, t, md.Type, u,
+			display.DurationString(mon.IngestDelay(md)),
+			display.DurationString(mon.SamplePeriod(md)), eol)
 	} else if 0 < count || *AlsoEmpty {
-		fmt.Printf("%4d %c%c %s %s %d+%d%s\n",
+		fmt.Printf("%4d %c%c %s %s %s+%s%s\n",
 			count, k, t, md.Type, u,
-			mon.IngestDelay(md)/time.Second,
-			mon.SamplePeriod(md)/time.Second, eol)
+			display.DurationString(mon.IngestDelay(md)),
+			display.DurationString(mon.SamplePeriod(md)), eol)
 	} else {
 		return
 	}
