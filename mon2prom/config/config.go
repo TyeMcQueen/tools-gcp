@@ -416,16 +416,16 @@ func (mm *MetricMatcher) PromName() string {
 
 // Returns `nil` or a function that scales float64 values from the units
 // used in StackDriver to the base units that are preferred in Prometheus.
-func (mm *MetricMatcher) Scaler() ScalingFunc {
+func (mm *MetricMatcher) Scaler() (ScalingFunc, string) {
 	key := mm.conf.Unit[mm.Unit]
 	if "" == key {
-		return nil
+		return nil, ""
 	}
 	f, ok := Scale[key]
 	if !ok {
 		lager.Exit().Map("Unrecognized scale key", key, "For unit", mm.Unit)
 	}
-	return f
+	return f, key
 }
 
 

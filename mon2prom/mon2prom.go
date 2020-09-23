@@ -10,6 +10,7 @@ import (
 	"time"
 
 	prom    "github.com/prometheus/client_golang/prometheus"
+	"github.com/TyeMcQueen/tools-gcp/display"
 	"github.com/TyeMcQueen/tools-gcp/mon"
 	"github.com/TyeMcQueen/tools-gcp/mon2prom/config"
 	"github.com/TyeMcQueen/tools-gcp/mon2prom/label"
@@ -19,6 +20,16 @@ import (
 )
 
 
+// Descriptive data for a GCP metric that we may want to report at start-up.
+// This structure can be freed after start-up is finished.
+type ForHumans struct {
+	Unit            string
+	Scale           string
+	MonCount        int
+	BucketType      string
+	MonBuckets      interface{}
+}
+
 // A vector of Prometheus metrics exported from a StackDriver metric.
 // Each metric in a vector has a different set of label values.
 type PromVector struct {
@@ -26,9 +37,10 @@ type PromVector struct {
 	MonDesc         *sd.MetricDescriptor
 	PromName        string              // Metric name in Prometheus
 	PromDesc        *prom.Desc
-	scaler          func(float64) float64
 	MetricKind      byte                // 'D'elta, 'G'auge, or 'C'ounter
 	ValueType       byte                // Histogram, Int, Float, or Bool
+	details         *ForHumans
+	scaler          func(float64) float64
 	BucketBounds    []float64           // Boundaries between hist buckets
 	SubBuckets      []int               // Count of SD buckets in each Prom one.
 	label.Set                           // To build hash keys from label values.
@@ -63,6 +75,7 @@ func basicPromVec(
 	md          *sd.MetricDescriptor,
 ) (*PromVector, *config.MetricMatcher) {
 	pv := PromVector{}
+	pv.details = new(ForHumans)
 	matcher := config.MustLoadConfig("").MatchMetric(md)
 	if nil == matcher {
 		return nil, nil
@@ -71,7 +84,8 @@ func basicPromVec(
 	pv.MonDesc = md
 	pv.MetricKind = matcher.Kind
 	pv.ValueType = matcher.Type
-	pv.scaler = matcher.Scaler()
+	pv.details.Unit = matcher.Unit
+	pv.scaler, pv.details.Scale = matcher.Scaler()
 	if 'H' == pv.ValueType && 'G' == pv.MetricKind {
 		lager.Warn().Map("Ignoring Histogram Gauge", md.Type)
 		return nil, nil
@@ -89,7 +103,13 @@ func (pv *PromVector) addTimeSeriesDetails(
 ) bool {
 	hasProjectID := false
 	resourceKeys := make(map[string]bool)
+	pv.details.MonCount = len(tss)
 	for _, ts := range tss {
+		if 'H' == pv.MetricKind && nil == pv.details.MonBuckets &&
+		   0 < len(ts.Points) {
+			pv.details.BucketType, pv.details.MonBuckets = display.BucketInfo(
+				ts.Points[0].Value)
+		}
 		for k, _ := range ts.Resource.Labels {
 			resourceKeys[k] = true
 			if "project_id" == k {
@@ -267,6 +287,25 @@ func NewVec(
 	pv.Schedule(ch, last)
 	prom.MustRegister(pv)
 	return pv
+}
+
+
+func (pv *PromVector) ForHumans() (
+	unit        string,
+	scale       string,
+	count       int,
+	bucketType  string,
+	buckets     interface{},
+) {
+	if nil != pv.details {
+		unit = pv.details.Unit
+		scale = pv.details.Scale
+		count = pv.details.MonCount
+		bucketType = pv.details.BucketType
+		buckets = pv.details.MonBuckets
+		pv.details = nil
+	}
+	return
 }
 
 
