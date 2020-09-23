@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
-	"time"
 
 	"github.com/TyeMcQueen/go-lager"
 	"golang.org/x/oauth2"
@@ -76,33 +75,14 @@ func GcloudDefaultProject() string {
 
 
 // Runs the gcloud command to get the access token that it uses and makes
-// a connection that uses that for auth to GCP services.  Passing in OAuth
-// scopes as extra arguments causes those scopes to be used in the connection.
-// However, it is frankly not known to the author if or when those scopes
-// have any actual impact.
-func GcloudAccessClient(
-	ctx context.Context, scopes ...string,
-) (*http.Client, error) {
+// a connection that uses that for auth to GCP services.  Token will not
+// be renewed so this access will only work for a relatively short time.
+func GcloudAccessClient(ctx context.Context) (*http.Client, error) {
 	if nil == ctx {
 		ctx = context.Background()
 	}
-	type gcloudAuth struct {
-		Access_token    string
-		Client_id       string
-		Client_secret   string
-		Refresh_token   string
-		Scopes          []string
-		Token_uri       string
-		Token_expiry    struct {
-			Datetime    string
-		}
-		Token_response  struct {
-			Token_type  string
-		}
-	}
-	auth := gcloudAuth{}
 
-	cmd := exec.Command("gcloud", "auth", "print-access-token", "--format=json")
+	cmd := exec.Command("gcloud", "auth", "print-access-token")
 	o := new(bytes.Buffer)      // Save Stdout to a buffer.
 	cmd.Stdout = o
 	e := new(bytes.Buffer)      // Save Stderr to a buffer.
@@ -114,38 +94,24 @@ func GcloudAccessClient(
 	if 0 < e.Len() {
 		return nil, fmt.Errorf("gcloud complained: %v", e.Bytes())
 	}
-	lager.Debug().Map("Gcloud output", o.Bytes())
-	if err := json.Unmarshal(o.Bytes(), &auth); nil != err {
-		return nil, fmt.Errorf("Error parsing gcloud JSON: %v", err)
-	}
-	lager.Debug().Map("Parsed gcloud output", auth)
 
-	expiry, err := time.Parse(
-		"2006-01-02 15:04:05.9", auth.Token_expiry.Datetime)
-	if nil != err {
-		return nil, fmt.Errorf("Invalid expiry time: %v", err)
+	accToken := o.Bytes()
+	if '\n' == accToken[len(accToken)-1] {
+		accToken = accToken[:len(accToken)-1]
 	}
-	token := oauth2.Token{
-		AccessToken:    auth.Access_token,
-		TokenType:      auth.Token_response.Token_type,
-		RefreshToken:   auth.Refresh_token,
-		Expiry:         expiry,
-	}
-	lager.Debug().Map("Token", token)
-	if 0 < len(scopes) {
-		auth.Scopes = scopes
-	}
-	conf := oauth2.Config{
-		ClientID:       auth.Client_id,
-		ClientSecret:   auth.Client_secret,
-		Endpoint:       oauth2.Endpoint{
-			TokenURL:   auth.Token_uri,
-		//  token_uri:  "https://www.googleapis.com/oauth2/v4/token",
-			AuthURL:    "https://accounts.google.com/o/oauth2/v2/auth",
-		},
-		Scopes:         auth.Scopes,
-	}
-	return conf.Client(ctx, &token), nil
+	lager.Debug().Map("Gcloud access token", accToken)
+
+	client := oauth2.NewClient(
+		ctx,
+		oauth2.StaticTokenSource(
+			&oauth2.Token{
+				TokenType:      "Bearer",
+				AccessToken:    string(accToken),
+			},
+		),
+	)
+
+	return client, nil
 }
 
 
@@ -170,7 +136,7 @@ func GoogleClient(
 	}
 	gcpClient, err := google.DefaultClient(ctx, defaultScopes...)
 	if err != nil {
-		gcpClient, err = GcloudAccessClient(ctx, scopes...)
+		gcpClient, err = GcloudAccessClient(ctx)
 	}
 	if err != nil {
 		return nil, err
