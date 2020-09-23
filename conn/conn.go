@@ -29,6 +29,7 @@ func DefaultProjectId() string {
 		creds, err := google.FindDefaultCredentials(
 			context.Background(),
 			"https://www.googleapis.com/auth/compute",
+			"https://www.googleapis.com/auth/monitoring.read",
 		)
 		if nil == err {
 			projectID = creds.ProjectID
