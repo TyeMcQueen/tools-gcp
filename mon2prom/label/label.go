@@ -23,6 +23,7 @@ type Set struct {
 	resourceKeys,               // Label names for a monitored resource.
 	keptKeys        []string    // The above 2 lists minus any ignored labels.
 	valueSet        Values      // The list of seen label values.
+	SkippedKeys     []string    // Sorted list of omitted keys.
 }
 
 // A label.Values contains all of the seen label values and provides a mapping
@@ -113,9 +114,9 @@ func (ls *Set) Init(
 	labelDescs      []*monitoring.LabelDescriptor,
 	resourceLabels  map[string]bool,
 ) {
-	skip := make(map[string]bool, len(skipKeys))
+	skip := make(map[string]int, len(skipKeys))
 	for _, k := range skipKeys {
-		skip[k] = true
+		skip[k] = 1
 	}
 
 	ls.valueSet = Values{
@@ -125,9 +126,15 @@ func (ls *Set) Init(
 	ls.valueSet.values[0] = "n/a"   // Skip \x00 as a rune for future use.
 
 	ls.labelKeys = make([]string, len(labelDescs))
+	skips := 0
 	o := 0
 	for _, ld := range labelDescs {
-		if !skip[ld.Key] {
+		if 0 < skip[ld.Key] {
+			if 1 == skip[ld.Key] {
+				skips++
+			}
+			skip[ld.Key]++
+		} else {
 			ls.labelKeys[o] = ld.Key
 			o++
 		}
@@ -138,13 +145,30 @@ func (ls *Set) Init(
 	ls.resourceKeys = make([]string, len(resourceLabels))
 	o = 0
 	for k, _ := range resourceLabels {
-		if !skip[k] {
+		if 0 < skip[k] {
+			if 1 == skip[k] {
+				skips++
+			}
+			skip[k]++
+		} else {
 			ls.resourceKeys[o] = k
 			o++
 		}
 	}
 	ls.resourceKeys = ls.resourceKeys[0:o]
 	sort.Strings(ls.resourceKeys)
+
+	if 0 < skips {
+		ls.SkippedKeys = make([]string, skips)
+		o = 0
+		for k, n := range skip {
+			if 1 < n {
+				ls.SkippedKeys[o] = k
+				o++
+			}
+		}
+	}
+	sort.Strings(ls.SkippedKeys)
 
 	ls.keptKeys = append(ls.labelKeys, ls.resourceKeys...)
 }
