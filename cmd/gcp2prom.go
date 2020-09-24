@@ -30,11 +30,21 @@ var WithDesc = pflag.BoolP("desc", "d", false,
 	"Show each metric's text description.")
 var WithBuckets = pflag.BoolP("buckets", "b", false,
 	"Show bucket information about any histogram metrics.")
+var OnlyUnits = pflag.StringP("unit", "u", "",
+	"Only export metrics with matching units (comma-separated).")
+var PickUnit map[string]bool
+var OnlyTypes = pflag.StringP("only", "o", "",
+	"Only export metrics using any of the listed types/kinds (from CDGHFIBS).")
+var NotTypes = pflag.StringP("not", "n", "",
+	"Exclude metrics using any of the listed types/kinds (from CDGHFIBS).")
+var Prefix = pflag.StringP("metric", "m", "",
+	"Only export metrics that match the listed prefix(es) (comma-separated).")
+var Prefixes []string
 
 
 func usage() {
 	fmt.Println(display.Join("\n",
-	"gcp2prom [-eqdb] [project-id]",
+	"gcp2prom [-eqdb] [-{muon}=...] [project-id]",
 	"  Reads GCP metrics and exports them for Prometheus to scrape.",
 	"  Every option can be abbreviated to its first letter.",
 	"  -?           Show this usage information.",
@@ -42,6 +52,11 @@ func usage() {
 	"  --quiet      Don't show info on start-up about metrics exported.",
 	"  --desc       Show each metric's text description.",
 	"  --buckets    Show bucket information about any histogram metrics.",
+	"  --metric=PRE Only export metrics with these prefix(es), comma-separated.",
+	"  --unit=U,... Only export metrics with matching units, comma-separated.",
+	"  --{only|not}={CDGHFIBS}",
+	"      Only export (or exclude) metrics using any of the following types:",
+	"          Cumulative Delta Gauge Histogram Float Int Bool String",
 	"  Format of descriptions of metrics to be exported:",
 	"    Count KindType Path Unit Delay+Period",
 	"    [Desc]",
@@ -63,6 +78,12 @@ func usage() {
 	"    Scale  How the metric's values are multiplied/divided for Prometheus.",
 	))
 	os.Exit(1)
+}
+
+
+func Contains(set string, k, t byte) bool {
+	any := string([]byte{k,t})
+	return strings.ContainsAny(set, any)
 }
 
 
@@ -115,8 +136,25 @@ func export(
 	client      mon.Client,
 	md          *monitoring.MetricDescriptor,
 	ch          chan<- *mon2prom.PromVector,
-	prefixes    []string,
 ) bool {
+	k, t, u := mon.MetricAbbrs(md)
+	if "" != *OnlyUnits && ! PickUnit[u] ||
+	   "" != *OnlyTypes && ! Contains(*OnlyTypes, k, t) ||
+	   "" != *NotTypes && Contains(*NotTypes, k, t) {
+		return false
+	}
+	if 0 < len(Prefixes) {
+		matched := false
+		for _, p := range Prefixes {
+			if strings.HasPrefix(md.Type, p) {
+				matched = true
+				break
+			}
+		}
+		if ! matched {
+			return false
+		}
+	}
 	prom := mon2prom.NewVec(proj, client, md, ch)
 	if nil == prom {
 		return false
@@ -135,6 +173,17 @@ func main() {
 	pflag.Parse()
 	if 1 < len(pflag.Args()) || *Usage {
 		usage()
+	}
+	*OnlyTypes = strings.ToUpper(*OnlyTypes)
+	*NotTypes = strings.ToUpper(*NotTypes)
+	if "" != *Prefix {
+		Prefixes = strings.Split(*Prefix, ",")
+	}
+	if "" != *OnlyUnits {
+		PickUnit = make(map[string]bool)
+		for _, u := range strings.Split(*OnlyUnits, ",") {
+			PickUnit[u] = true
+		}
 	}
 
 	proj := conn.DefaultProjectId()
