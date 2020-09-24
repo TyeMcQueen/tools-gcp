@@ -31,7 +31,8 @@ var WithHelp = pflag.BoolP("help", "h", false,
 var WithBuckets = pflag.BoolP("buckets", "b", false,
 	"Show bucket information about any histogram metrics.")
 var OnlyUnits = pflag.StringP("unit", "u", "",
-	"Only show metrics with matching units.")
+	"Only show metrics with matching units (comma-separated).")
+var ShowUnit map[string]bool
 var OnlyTypes = pflag.StringP("only", "o", "",
 	"Only show metrics using any of the listed types (from CDGHFIBS).")
 var NotTypes = pflag.StringP("not", "n", "",
@@ -59,7 +60,7 @@ func usage() {
 	"  --buckets    Show bucket information about any histogram metrics.",
 	"  --count      With -e, shows metric counts (as w/o -e).  Slow w/o -m.",
 	"  --metric=PRE Only show metrics with these prefix(es), comma-separated.",
-	"  --unit=ms    Only show metrics with matching units.",
+	"  --unit=ms    Only show metrics with matching units, comma-separated.",
 	"  --depth=1-3  Only show groups of metrics.  -d1 just shows service/.",
 	"               -d2 shows service/object/.  -d3 can show svc/obj/sub/.",
 	"               -d causes -j, -v, -h, and -b to be ignored.",
@@ -143,8 +144,8 @@ func ShowMetric(
 		return count, prior
 	}
 	k, t, u := mon.MetricAbbrs(md)
-	if "" != *OnlyUnits && u != *OnlyUnits ||
-	   "" != *OnlyTypes && !Contains(*OnlyTypes, k, t) ||
+	if "" != *OnlyUnits && ! ShowUnit[u] ||
+	   "" != *OnlyTypes && ! Contains(*OnlyTypes, k, t) ||
 	   "" != *NotTypes && Contains(*NotTypes, k, t) {
 		return count, prior
 	}
@@ -201,6 +202,12 @@ func main() {
 	}
 	*OnlyTypes = strings.ToUpper(*OnlyTypes)
 	*NotTypes = strings.ToUpper(*NotTypes)
+	if "" != *OnlyUnits {
+		ShowUnit = make(map[string]bool)
+		for _, u := range strings.Split(*OnlyUnits, ",") {
+			ShowUnit[u] = true
+		}
+	}
 	eol := " \x1b[K"
 	if *AlsoEmpty || *AsJson || *ShowValues || *Quiet {
 		*Quiet = true
