@@ -26,6 +26,8 @@ var Quiet = pflag.BoolP("quiet", "q", false,
 	"Don't show info on start-up about metrics exported.")
 var NoOp = pflag.BoolP("exit", "e", false,
 	"Just display which metrics would be exported then exit.")
+var AsJson = pflag.BoolP("json", "j", false,
+	"Log metric descriptions at start-up as JSON.")
 var WithDesc = pflag.BoolP("desc", "d", false,
 	"Show each metric's text description.")
 var WithBuckets = pflag.BoolP("buckets", "b", false,
@@ -44,12 +46,13 @@ var Prefixes []string
 
 func usage() {
 	fmt.Println(display.Join("\n",
-	"gcp2prom [-eqdb] [-{muon}=...] [project-id]",
+	"gcp2prom [-eqjdb] [-{muon}=...] [project-id]",
 	"  Reads GCP metrics and exports them for Prometheus to scrape.",
 	"  Every option can be abbreviated to its first letter.",
 	"  -?           Show this usage information.",
 	"  --exit       Just display which metrics would be exported then exit.",
 	"  --quiet      Don't show info on start-up about metrics exported.",
+	"  --json       Log metric descriptions (on start-up) as JSON.",
 	"  --desc       Show each metric's text description.",
 	"  --buckets    Show bucket information about any histogram metrics.",
 	"  --metric=PRE Only export metrics with these prefix(es), comma-separated.",
@@ -90,6 +93,38 @@ func Contains(set string, k, t byte) bool {
 func displayMetric(prom *mon2prom.PromVector, client mon.Client) {
 	k, t := prom.MetricKind, prom.ValueType
 	u, scale, gcpCount, bucketType, gcpBuckets := prom.ForHumans()
+
+	if *AsJson {
+		if 'H' == k {
+			lager.Info().Map(
+				"metricDescriptor", prom.MonDesc,
+				"gcpCount",         gcpCount,
+				"gcpBucketType",    bucketType,
+				"gcpBuckets",       gcpBuckets,
+				"kind",             string([]byte{k}),
+				"type",             string([]byte{t}),
+				"unit",             u,
+				"skippedKeys",      prom.Set.SkippedKeys,
+				"prometheusName",   prom.PromName,
+				"scale",            scale,
+				"promCount",        len(*prom.MetricMap),
+				"promBuckets",      prom.BucketBounds,
+			)
+		} else {
+			lager.Info().Map(
+				"metricDescriptor", prom.MonDesc,
+				"gcpCount",         gcpCount,
+				"kind",             string([]byte{k}),
+				"type",             string([]byte{t}),
+				"unit",             u,
+				"skippedKeys",      prom.Set.SkippedKeys,
+				"prometheusName",   prom.PromName,
+				"scale",            scale,
+				"promCount",        len(*prom.MetricMap),
+			)
+		}
+		return
+	}
 
 	fmt.Printf("%4d %c%c %s %s %s+%s\n",
 		gcpCount, k, t, prom.MonDesc.Type, u,
