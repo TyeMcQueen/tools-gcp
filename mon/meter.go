@@ -29,7 +29,7 @@ var mdPageSeconds = NewHistVec(prometheus.HistogramOpts{
 var tsPageSeconds = NewHistVec(prometheus.HistogramOpts{
 	Namespace: "gcp",  Buckets: buckets,
 	Subsystem: "metric",  Name: "page_latency_seconds",
-	Help: "Seconds it took to fetch one page of metrics from GCP",
+	Help: "Seconds it took to fetch one page of metric values from GCP",
 },  "project_id", "delta", "kind", "first_page", "last_page", "code")
 var tsCount = NewCounterVec(prometheus.CounterOpts{
 	Namespace: "gcp",  Subsystem: "metric",  Name: "values_total",

@@ -12,12 +12,12 @@ package value
 import (
 	"time"
 
-	proto   "github.com/golang/protobuf/proto"
+			"github.com/golang/protobuf/proto"
 	prom    "github.com/prometheus/client_golang/prometheus"
 	dto     "github.com/prometheus/client_model/go"
 			"github.com/TyeMcQueen/tools-gcp/mon"
-	label   "github.com/TyeMcQueen/tools-gcp/mon2prom/label"
-	lager   "github.com/TyeMcQueen/go-lager"
+			"github.com/TyeMcQueen/tools-gcp/mon2prom/label"
+			"github.com/TyeMcQueen/go-lager"
 	sd      "google.golang.org/api/monitoring/v3"   // StackDriver
 )
 
