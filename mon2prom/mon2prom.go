@@ -281,7 +281,7 @@ func NewVec(
 		}
 		pv.Populate(ts)
 	}
-	lager.Info().Map("Exporting", pv.PromName, "From metrics", len(tss),
+	lager.Trace().Map("Exporting", pv.PromName, "From metrics", len(tss),
 		"To metrics", len(*pv.MetricMap))
 	pv.Publish()
 	pv.Schedule(ch, last)
@@ -415,7 +415,7 @@ func (pv *PromVector) Update(monClient mon.Client, ch chan<- *PromVector) {
 		pv.Populate(ts)
 		count++
 	}
-	lager.Info().Map("Updated", pv.PromName, "From metrics", count,
+	lager.Trace().Map("Updated", pv.PromName, "From metrics", count,
 		"To metrics", len(*pv.MetricMap))
 	pv.Publish()
 	pv.Schedule(ch, last)
