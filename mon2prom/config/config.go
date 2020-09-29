@@ -471,11 +471,11 @@ func (mm *MetricMatcher) matches(s Selector) bool {
 		}
 	}
 
-	if "" != s.Only && ! Contains(s.Only, mm.Kind, mm.Type) {
+	if "" != s.Only && ! mon.Contains(s.Only, mm.Kind, mm.Type) {
 		return false
 	}
 
-	if "" != s.Not && Contains(s.Not, mm.Kind, mm.Type) {
+	if "" != s.Not && mon.Contains(s.Not, mm.Kind, mm.Type) {
 		return false
 	}
 
@@ -493,13 +493,6 @@ func (mm *MetricMatcher) matches(s Selector) bool {
 	}
 
 	return true
-}
-
-
-// Returns `true` if either `k` or `t` is contained in the string `set`.
-func Contains(set string, k, t byte) bool {
-	any := string([]byte{k,t})
-	return strings.ContainsAny(set, any)
 }
 
 

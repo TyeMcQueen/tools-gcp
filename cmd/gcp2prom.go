@@ -84,12 +84,6 @@ func usage() {
 }
 
 
-func Contains(set string, k, t byte) bool {
-	any := string([]byte{k,t})
-	return strings.ContainsAny(set, any)
-}
-
-
 func displayMetric(prom *mon2prom.PromVector, client mon.Client) {
 	k, t := prom.MetricKind, prom.ValueType
 	u, scale, gcpCount, bucketType, gcpBuckets := prom.ForHumans()
@@ -174,8 +168,8 @@ func export(
 ) bool {
 	k, t, u := mon.MetricAbbrs(md)
 	if "" != *OnlyUnits && ! PickUnit[u] ||
-	   "" != *OnlyTypes && ! Contains(*OnlyTypes, k, t) ||
-	   "" != *NotTypes && Contains(*NotTypes, k, t) {
+	   "" != *OnlyTypes && ! mon.Contains(*OnlyTypes, k, t) ||
+	   "" != *NotTypes && mon.Contains(*NotTypes, k, t) {
 		return false
 	}
 	if 0 < len(Prefixes) {

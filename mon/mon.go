@@ -31,6 +31,13 @@ func AsDuration(str string) time.Duration {
 }
 
 
+// Returns `true` if either `k` or `t` is contained in the string `set`.
+func Contains(set string, k, t byte) bool {
+	any := string([]byte{k,t})
+	return strings.ContainsAny(set, any)
+}
+
+
 func Timeout(duration string) context.Context {
 	if "" == duration {
 		duration = os.Getenv("MAX_QUERY_DURATION")

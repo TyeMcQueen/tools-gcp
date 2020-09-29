@@ -81,12 +81,6 @@ func usage() {
 }
 
 
-func Contains(set string, k, t byte) bool {
-	any := string([]byte{k,t})
-	return strings.ContainsAny(set, any)
-}
-
-
 func MetricPrefix(mdPath string, depth int) string {
 	parts := strings.Split(mdPath, "/")
 	if depth < 1 {
@@ -145,8 +139,8 @@ func ShowMetric(
 	}
 	k, t, u := mon.MetricAbbrs(md)
 	if "" != *OnlyUnits && ! ShowUnit[u] ||
-	   "" != *OnlyTypes && ! Contains(*OnlyTypes, k, t) ||
-	   "" != *NotTypes && Contains(*NotTypes, k, t) {
+	   "" != *OnlyTypes && ! mon.Contains(*OnlyTypes, k, t) ||
+	   "" != *NotTypes && mon.Contains(*NotTypes, k, t) {
 		return count, prior
 	}
 
