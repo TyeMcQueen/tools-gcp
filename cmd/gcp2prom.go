@@ -89,14 +89,14 @@ func displayMetric(prom *mon2prom.PromVector, client mon.Client) {
 	u, scale, gcpCount, bucketType, gcpBuckets := prom.ForHumans()
 
 	if *AsJson {
-		if 'H' == k {
+		if mon.THist == t {
 			lager.Info().Map(
 				"metricDescriptor", prom.MonDesc,
 				"gcpCount",         gcpCount,
 				"gcpBucketType",    bucketType,
 				"gcpBuckets",       gcpBuckets,
-				"kind",             string([]byte{k}),
-				"type",             string([]byte{t}),
+				"kind",             string([]byte{byte(k)}),
+				"type",             string([]byte{byte(t)}),
 				"unit",             u,
 				"skippedKeys",      prom.Set.SkippedKeys,
 				"prometheusName",   prom.PromName,
@@ -108,8 +108,8 @@ func displayMetric(prom *mon2prom.PromVector, client mon.Client) {
 			lager.Info().Map(
 				"metricDescriptor", prom.MonDesc,
 				"gcpCount",         gcpCount,
-				"kind",             string([]byte{k}),
-				"type",             string([]byte{t}),
+				"kind",             string([]byte{byte(k)}),
+				"type",             string([]byte{byte(t)}),
 				"unit",             u,
 				"skippedKeys",      prom.Set.SkippedKeys,
 				"prometheusName",   prom.PromName,
@@ -153,7 +153,7 @@ func displayMetric(prom *mon2prom.PromVector, client mon.Client) {
 	}
 	fmt.Printf("%4d %c%c %s%s\n",
 		len(*prom.MetricMap), k, t, prom.PromName, scale)
-	if 'H' == t && *WithBuckets {
+	if mon.THist == t && *WithBuckets {
 		fmt.Printf("    %v\n", prom.BucketBounds)
 	}
 	fmt.Printf("\n")

@@ -19,6 +19,22 @@ type Client struct {
 	*monitoring.Service
 }
 
+type MetricKind byte
+const (
+	KCount  MetricKind = 'C'
+	KDelta  MetricKind = 'D'
+	KGauge  MetricKind = 'G'
+)
+
+type ValueType byte
+const (
+	THist   ValueType = 'H'
+	TFloat  ValueType = 'F'
+	TInt    ValueType = 'I'
+	TBool   ValueType = 'B'
+	TString ValueType = 'S'
+)
+
 const QuotaExceeded = 429
 
 
@@ -32,8 +48,8 @@ func AsDuration(str string) time.Duration {
 
 
 // Returns `true` if either `k` or `t` is contained in the string `set`.
-func Contains(set string, k, t byte) bool {
-	any := string([]byte{k,t})
+func Contains(set string, k MetricKind, t ValueType) bool {
+	any := string([]byte{byte(k),byte(t)})
 	return strings.ContainsAny(set, any)
 }
 
@@ -67,9 +83,11 @@ func MustMonitoringClient(gcpClient *http.Client) Client {
 
 var braces = regexp.MustCompile(`[{][^{}]+[}]`) // Non-greedy match for {.*}.
 
-func MetricAbbrs(md *monitoring.MetricDescriptor) (byte, byte, string) {
-	k := md.MetricKind[0]
-	t := md.ValueType[0]
+func MetricAbbrs(
+	md *monitoring.MetricDescriptor,
+) (MetricKind, ValueType, string) {
+	k := MetricKind(md.MetricKind[0])
+	t := ValueType(md.ValueType[0])
 	if 'M' == k {
 		k = 'K'     // 'K' for unspecified Kind (should never happen)
 	}
@@ -78,8 +96,8 @@ func MetricAbbrs(md *monitoring.MetricDescriptor) (byte, byte, string) {
 	}
 	if 'D' == t {
 		switch md.ValueType[1] {
-			case 'O': t = 'F'   // Double -> Float
-			case 'I': t = 'H'   // Distribution -> Histogram
+			case 'O': t = TFloat    // Double -> Float
+			case 'I': t = THist     // Distribution -> Histogram
 		}
 	}
 	u := md.Unit
@@ -162,7 +180,7 @@ func (m Client) tsListLatest(
 }
 
 
-func MetricKind(md *monitoring.MetricDescriptor) string {
+func MetricKindLabel(md *monitoring.MetricDescriptor) string {
 	kind := "other"
 	if "DISTRIBUTION" == md.ValueType {
 		kind = "histogram"
@@ -197,7 +215,7 @@ func (m Client) GetLatestTimeSeries(
 		fmt.Sprintf(`metric.type="%s"`, md.Type),
 	)
 	delta := tDelta("DELTA" == md.MetricKind)
-	kind := MetricKind(md)
+	kind := MetricKindLabel(md)
 	first, last := isFirst, !isLast
 	for !last {
 		start := time.Now()

@@ -49,10 +49,10 @@ type MetricMatcher struct {
 	SubSys      string      // Middle part of Prom metric name.
 	Name        string      // Last part of Prom metric name, so far.
 	// Metric kind; one of 'C', 'D', or 'G' for cumulative, delta, or gauge.
-	Kind        byte
+	Kind        mon.MetricKind
 	// Metric type; one of 'F', 'I', 'S', 'H', or 'B' for float, int, string,
 	// histogram (distribution), or bool.
-	Type        byte
+	Type        mon.ValueType
 	// MD.Unit but '' becomes '-' and values (or parts of values) like
 	// '{Bytes}' are replaced by just '{}'.
 	Unit        string

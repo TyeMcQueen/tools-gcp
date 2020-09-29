@@ -37,8 +37,8 @@ type PromVector struct {
 	MonDesc         *sd.MetricDescriptor
 	PromName        string              // Metric name in Prometheus
 	PromDesc        *prom.Desc
-	MetricKind      byte                // 'D'elta, 'G'auge, or 'C'ounter
-	ValueType       byte                // Histogram, Int, Float, or Bool
+	MetricKind      mon.MetricKind      // 'D'elta, 'G'auge, or 'C'ounter
+	ValueType       mon.ValueType       // Histogram, Int, Float, or Bool
 	details         *ForHumans
 	scaler          func(float64) float64
 	BucketBounds    []float64           // Boundaries between hist buckets
@@ -86,7 +86,7 @@ func basicPromVec(
 	pv.ValueType = matcher.Type
 	pv.details.Unit = matcher.Unit
 	pv.scaler, pv.details.Scale = matcher.Scaler()
-	if 'H' == pv.ValueType && 'G' == pv.MetricKind {
+	if mon.THist == pv.ValueType && mon.KGauge == pv.MetricKind {
 		lager.Warn().Map("Ignoring Histogram Gauge", md.Type)
 		return nil, nil
 	}
@@ -105,7 +105,7 @@ func (pv *PromVector) addTimeSeriesDetails(
 	resourceKeys := make(map[string]bool)
 	pv.details.MonCount = len(tss)
 	for _, ts := range tss {
-		if 'H' == pv.MetricKind && nil == pv.details.MonBuckets &&
+		if mon.THist == pv.ValueType && nil == pv.details.MonBuckets &&
 		   0 < len(ts.Points) {
 			pv.details.BucketType, pv.details.MonBuckets = display.BucketInfo(
 				ts.Points[0].Value)
@@ -138,7 +138,7 @@ func (pv *PromVector) addTimeSeriesDetails(
 
 	if dv := tss[0].Points[0].Value.DistributionValue; nil != dv {
 		return pv.resampleHist(matcher, dv)
-	} else if 'H' == pv.ValueType {
+	} else if mon.THist == pv.ValueType {
 		lager.Fail().Map(
 			"Histogram metric lacks DistributionValue", tss[0].Points[0])
 	}
@@ -183,7 +183,7 @@ func (pv *PromVector) resampleHist(
 	}
 	pv.BucketBounds, pv.SubBuckets = combineBucketBoundaries(
 		boundCount, firstBound, nextBound,
-		'I' == pv.ValueType,
+		mon.TInt == pv.ValueType,
 		minBuckets, minBound, minRatio, maxBound,
 	)
 	lager.Debug().Map("bounds", pv.BucketBounds,
@@ -348,7 +348,7 @@ func (pv *PromVector) ReadOnlyMap() map[label.RuneList]value.Metric {
 func (pv *PromVector) Clear() {
 	m := make(map[label.RuneList]value.Metric)
 	pv.MetricMap = &m
-	if 'D' != pv.MetricKind {
+	if mon.KDelta != pv.MetricKind {
 		return
 	}
 	ro := pv.ReadOnlyMap()
@@ -369,8 +369,8 @@ func (pv *PromVector) Publish() {
 		len(*pv.MetricMap) - len(pv.ReadOnlyMap()),
 		pv.ProjectID,
 		pv.PromName,
-		tDelta('D' == pv.MetricKind),
-		mon.MetricKind(pv.MonDesc),
+		tDelta(mon.KDelta == pv.MetricKind),
+		mon.MetricKindLabel(pv.MonDesc),
 	)
 	m := *pv.MetricMap
 	for k, v := range m {

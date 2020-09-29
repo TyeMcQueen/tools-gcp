@@ -96,8 +96,8 @@ func MetricPrefix(mdPath string, depth int) string {
 func DescribeMetric(
 	count   int,
 	md      *monitoring.MetricDescriptor,
-	k       byte,
-	t       byte,
+	k       mon.MetricKind,
+	t       mon.ValueType,
 	u       string,
 	bType   string,
 	buckets interface{},
@@ -166,7 +166,7 @@ func ShowMetric(
 						ts.Points = ts.Points[0:1]
 					}
 					display.DumpJson("", ts)
-				} else if 1 == count && 'H' == t {
+				} else if 1 == count && mon.THist == t {
 					bucketType, buckets = display.BucketInfo(ts.Points[0].Value)
 				}
 			}

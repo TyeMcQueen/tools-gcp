@@ -15,6 +15,7 @@ import (
 	proto   "github.com/golang/protobuf/proto"
 	prom    "github.com/prometheus/client_golang/prometheus"
 	dto     "github.com/prometheus/client_model/go"
+			"github.com/TyeMcQueen/tools-gcp/mon"
 	label   "github.com/TyeMcQueen/tools-gcp/mon2prom/label"
 	lager   "github.com/TyeMcQueen/go-lager"
 	sd      "google.golang.org/api/monitoring/v3"   // StackDriver
@@ -37,8 +38,8 @@ type Metric interface {
 	// Export() constructs a dto.Metric from a value.Metric, the label names
 	// in a label.Set, and the label values encoded in a label.RuneList.
 	Export(
-		metricKind,
-		valueType   byte,
+		metricKind  mon.MetricKind,
+		valueType   mon.ValueType,
 		ls          *label.Set,
 		rl          label.RuneList,
 		bounds      []float64,
@@ -151,8 +152,8 @@ func (hv *Histogram) Copy() Metric {
 
 // Export() returns a Protobuf version of a simple metric.
 func (sv *Simple) Export(
-	metricKind,
-	valueType   byte,
+	metricKind  mon.MetricKind,
+	valueType   mon.ValueType,
 	ls          *label.Set,
 	rl          label.RuneList,
 	_           []float64,
@@ -160,14 +161,14 @@ func (sv *Simple) Export(
 	m.Label = ls.LabelPairs(rl)
 	m.TimestampMs = proto.Int64(1000*sv.Epoch())
 
-	if 'H' != valueType {
-		if 'G' == metricKind {
+	if mon.THist != valueType {
+		if mon.KGauge == metricKind {
 			m.Gauge = &dto.Gauge{Value: proto.Float64(sv.Float())}
-		} else if 'C' == metricKind || 'D' == metricKind {
+		} else if mon.KCount == metricKind || mon.KDelta == metricKind {
 			m.Counter = &dto.Counter{Value: proto.Float64(sv.Float())}
 		} else {
 			lager.Fail().Map("Expect C or G MetricKind not",
-				[]byte{metricKind, valueType})
+				[]byte{byte(metricKind), byte(valueType)})
 		}
 	}
 	return m
@@ -176,8 +177,8 @@ func (sv *Simple) Export(
 
 // Export() returns a Protobuf version of a histogram metric.
 func (hv *Histogram) Export(
-	metricKind,
-	valueType   byte,
+	metricKind  mon.MetricKind,
+	valueType   mon.ValueType,
 	ls          *label.Set,
 	rl          label.RuneList,
 	bounds      []float64,
@@ -233,8 +234,8 @@ func (hv *RwHistogram) Convert(
 // metricMap using the RuneList as the key.
 func Populate(
 	metricMap   map[label.RuneList]Metric,
-	metricKind,
-	valueType   byte,
+	metricKind  mon.MetricKind,
+	valueType   mon.ValueType,
 	scaler      func(float64) float64,
 	ls          *label.Set,
 	subBuckets  []int,
@@ -254,7 +255,7 @@ func Populate(
 	var wv RwMetric
 	var f float64
 	v := ts.Points[0].Value
-	if 'H' == valueType {
+	if mon.THist == valueType {
 		var hv *RwHistogram
 		if nil == mv {
 			hv = new(RwHistogram)
@@ -272,15 +273,15 @@ func Populate(
 			sv.AddFloat(mv.Float())
 		}
 		switch valueType {
-		case 'B':
+		case mon.TBool:
 			if 0.0 == sv.Float() && nil != v.BoolValue && *v.BoolValue {
 				f = 1.0
 			}
-		case 'F':
+		case mon.TFloat:
 			f = *v.DoubleValue
-		case 'I':
+		case mon.TInt:
 			f = float64(*v.Int64Value)
-	//  case 'S':
+	//  case mon.TString:
 		default:
 			lager.Panic().Map("ValueType not in [HFIB]", valueType)
 		}
