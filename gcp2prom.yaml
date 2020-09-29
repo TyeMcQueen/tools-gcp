@@ -38,9 +38,11 @@ histogram:
 omitlabel:
   - for:
       prefix: [ loadbal ]
+    labels: [ client_country ]
+  - for:
+      prefix: [ loadbal ]
       only: H
-      unit: ms
-    labels: [ proxy_continent, client_country ]
+    labels: [ proxy_continent ]
 suffix:
   - replace:
       /total_latencies:         /combined_latencies
