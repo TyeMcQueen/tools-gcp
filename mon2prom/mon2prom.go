@@ -443,7 +443,7 @@ func (pv *PromVector) Schedule(ch chan<- *PromVector, end string) {
 	epoch  := value.StampEpoch(end)
 	sample := mon.SamplePeriod(pv.MonDesc)
 	delay  := mon.IngestDelay(pv.MonDesc)
-	random := time.Duration(rand.Float64()*float64(5*time.Second))
+	random := time.Duration( ( 9.0 + 5.0*rand.Float64() )*float64(time.Second) )
 	when   := time.Unix(epoch, 0)
 	lager.Debug().Map(
 		"For", pv.PromName,
