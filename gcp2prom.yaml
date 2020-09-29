@@ -54,7 +54,7 @@ suffix:
       /uploaded_bytes_billed:   /billed_uploaded_bytes
   - for:
       prefix: [ loadbal ]
-      only: H
+      unit: s,ms,us,ns
     replace:
       _latencies:       _latency_seconds
       rtt:              rtt_seconds
