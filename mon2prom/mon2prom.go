@@ -44,6 +44,7 @@ type PromVector struct {
 	BucketBounds    []float64           // Boundaries between hist buckets
 	SubBuckets      []int               // Count of SD buckets in each Prom one.
 	label.Set                           // To build hash keys from label values.
+	PrevEnd         string              // Timestamp of prior sample period end.
 	MetricMap       *map[label.RuneList]value.Metric
 	ReadOnly        atomic.Value        // Read-only map for exporting from.
 }
@@ -402,8 +403,8 @@ func (pv *PromVector) Populate(ts *sd.TimeSeries) {
 // metric and Populates() them into the metric map.
 func (pv *PromVector) Update(monClient mon.Client, ch chan<- *PromVector) {
 	pv.Clear()
+	last := pv.PrevEnd
 	count := 0
-	last := ""
 	var ts *sd.TimeSeries
 	for ts = range monClient.StreamLatestTimeSeries(
 		nil, pv.ProjectID, pv.MonDesc, 1, "0",
@@ -414,6 +415,13 @@ func (pv *PromVector) Update(monClient mon.Client, ch chan<- *PromVector) {
 		}
 		pv.Populate(ts)
 		count++
+	}
+	if "" == last {
+		lager.Fail().Map(
+			"Updated metric w/ no end epic", pv.PromName,
+			"PrevEnd", pv.PrevEnd,
+			"Samples this period", count,
+		)
 	}
 	lager.Trace().Map("Updated", pv.PromName, "From metrics", count,
 		"To metrics", len(*pv.MetricMap))
@@ -427,6 +435,11 @@ func (pv *PromVector) Update(monClient mon.Client, ch chan<- *PromVector) {
 // random seconds to reduce "thundering herd") and schedule pv to be sent
 // to the metric runner's channel at that time.
 func (pv *PromVector) Schedule(ch chan<- *PromVector, end string) {
+	now := time.Now()
+	if "" == end {
+		end = now.In(time.UTC).Format("2006-01-02T15:04:05Z")
+	}
+	pv.PrevEnd = end
 	epoch  := value.StampEpoch(end)
 	sample := mon.SamplePeriod(pv.MonDesc)
 	delay  := mon.IngestDelay(pv.MonDesc)
@@ -440,10 +453,14 @@ func (pv *PromVector) Schedule(ch chan<- *PromVector, end string) {
 		"Plus random pause", float64(random)/float64(time.Second),
 	)
 	when = when.Add(sample+delay+random)
-	now := time.Now()
 	for when.Before(now) {
 		// TODO: Increment "skipping sample period" metric!!!
-		lager.Warn().Map("Skipping sample period for", pv.PromName)
+		lager.Warn().Map(
+			"Skipping sample period for", pv.PromName,
+			"Next sample", when,
+			"Now", now,
+			"SamplePeriod", sample,
+		)
 		when = when.Add(sample)
 	}
 	time.AfterFunc(
