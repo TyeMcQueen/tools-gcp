@@ -5,12 +5,15 @@ subsystem:
   bigquery.googleapis.com/query/:               bigquery_query
   bigquery.googleapis.com/slots/:               bigquery_slot
   bigquery.googleapis.com/storage/:             bigquery_store
+  cloudfunctions.googleapis.com/function/:      cloud_function
+  compute.googleapis.com/firewall/:             firewall
   loadbalancing.googleapis.com/https/:          lb_https
   loadbalancing.googleapis.com/https/internal/: ilb_https
   loadbalancing.googleapis.com/l3/external/:    lb_l3
   loadbalancing.googleapis.com/l3/internal/:    ilb_l3
   loadbalancing.googleapis.com/tcp_ssl_proxy/:  tcp_ssl_proxy
   router.googleapis.com/nat/:                   cloud_nat
+  storage.googleapis.com/storage/:              storage
 unit:
   "10^2.%":   /100
   "%":        /100
@@ -28,7 +31,9 @@ histogram:
     minbuckets: 24
     minbound: 0.01
     minratio: 1.9
-    maxbound: 500
+    maxbound: 600
+  - minbuckets: 24
+    minratio: 1.9
   - maxbuckets: 32
 omitlabel:
   - for:
