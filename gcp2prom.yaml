@@ -1,15 +1,15 @@
 ---
 system:       gcp
 subsystem:
+  bigquery.googleapis.com/job/:                 bigquery_job
+  bigquery.googleapis.com/query/:               bigquery_query
+  bigquery.googleapis.com/slots/:               bigquery_slot
+  bigquery.googleapis.com/storage/:             bigquery_store
   loadbalancing.googleapis.com/https/:          lb_https
   loadbalancing.googleapis.com/https/internal/: ilb_https
   loadbalancing.googleapis.com/l3/external/:    lb_l3
   loadbalancing.googleapis.com/l3/internal/:    ilb_l3
   loadbalancing.googleapis.com/tcp_ssl_proxy/:  tcp_ssl_proxy
-  bigquery.googleapis.com/job/:                 bigquery_job
-  bigquery.googleapis.com/query/:               bigquery_query
-  bigquery.googleapis.com/slots/:               bigquery_slot
-  bigquery.googleapis.com/storage/:             bigquery_store
   router.googleapis.com/nat/:                   cloud_nat
 unit:
   "10^2.%":   /100
@@ -32,8 +32,7 @@ histogram:
   - maxbuckets: 32
 omitlabel:
   - for:
-      prefix:
-        - loadbal
+      prefix: [ loadbal ]
       only: H
       unit: ms
     labels: [ proxy_continent, client_country ]
@@ -49,8 +48,7 @@ suffix:
       /utilization:             /utilization_ratio
       /uploaded_bytes_billed:   /billed_uploaded_bytes
   - for:
-      prefix:
-        - loadbal
+      prefix: [ loadbal ]
       only: H
     replace:
       _latencies:       _latency_seconds
@@ -68,6 +66,6 @@ suffix:
   - for:
       only: G
     replace:
-      instance_group/size:  instances_count
-      allocation/usage:     quota_usage
-      port_usage:           used_ports
+      instance_group/size:      instances_count
+      allocation/usage:         quota_usage
+      port_usage:               used_ports
