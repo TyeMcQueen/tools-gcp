@@ -46,7 +46,7 @@ type Metric interface {
 	) dto.Metric
 
 	// Copy() returns a deep, read-only copy of a value.Metric.
-	Copy() Metric
+	Copy(time.Duration) Metric
 
 	// Float() returns the float64 value of the value.Metric (for histograms,
 	// this is the sum of the observations).
@@ -76,8 +76,9 @@ type RwMetric interface {
 // implmenets the value.Metric interface.  It is read-only (but can be
 // converted into a value.RwSimple).
 type Simple struct {
-	epoch   int64
-	val     float64
+	epoch       int64   // The epoch seconds of end of the sample period.
+	promEpoch   int64   // The epoch for Prometheus (incremented for Counters).
+	val         float64
 }
 
 // A value.RwSimple is a value.Simple that can receive updates.
@@ -125,27 +126,30 @@ func (_ *Histogram)    IsReadOnly() bool { return true }
 func (_ *RwSimple)     IsReadOnly() bool { return false }
 func (_ *RwHistogram)  IsReadOnly() bool { return false }
 
-// The following 2 methods work on all 4 Metric types:
+// The following 3 methods work on all 4 Metric types:
 func (sv *Simple)      Epoch() int64 { return sv.epoch }
 func (sv *Simple)      Float() float64 { return sv.val }
+func (sv *Simple)      PromEpoch() int64 { return sv.promEpoch }
 
 func (sv *RwSimple)    AddFloat(f float64) { sv.val += f }
 func (hv *RwHistogram) AddFloat(f float64) { hv.val += f }
-func (sv *RwSimple)    SetEpoch(e int64) { sv.epoch = e }
-func (hv *RwHistogram) SetEpoch(e int64) { hv.epoch = e }
+func (sv *RwSimple)    SetEpoch(e int64) { sv.epoch = e; sv.promEpoch = e }
+func (hv *RwHistogram) SetEpoch(e int64) { hv.epoch = e; hv.promEpoch = e }
 
 // Each of the following 4 metrics also work on the corresponding Rw* type:
 
 func (sv *Simple)      AsReadOnly() Metric { return sv }
 func (hv *Histogram)   AsReadOnly() Metric { return hv }
 
-func (sv *Simple) Copy() Metric {
+func (sv *Simple) Copy(samplePeriod time.Duration) Metric {
 	copy := *sv
+	copy.promEpoch += int64(samplePeriod.Seconds())
 	return &copy
 }
 
-func (hv *Histogram) Copy() Metric {
+func (hv *Histogram) Copy(samplePeriod time.Duration) Metric {
 	copy := *hv
+	copy.promEpoch += int64(samplePeriod.Seconds())
 	return &copy
 }
 
@@ -159,7 +163,7 @@ func (sv *Simple) Export(
 	_           []float64,
 ) (m dto.Metric) {
 	m.Label = ls.LabelPairs(rl)
-	m.TimestampMs = proto.Int64(1000*sv.Epoch())
+	m.TimestampMs = proto.Int64(1000*sv.PromEpoch())
 
 	if mon.THist != valueType {
 		if mon.KGauge == metricKind {
@@ -265,7 +269,7 @@ func Populate(
 			hv = mv.(*RwHistogram)
 		}
 		f = hv.Convert(subBuckets, v.DistributionValue)
-		hv.epoch = epoch
+		hv.SetEpoch(epoch)
 		wv = hv
 	} else {
 		sv := new(RwSimple)
@@ -285,7 +289,7 @@ func Populate(
 		default:
 			lager.Panic().Map("ValueType not in [HFIB]", valueType)
 		}
-		sv.epoch = epoch
+		sv.SetEpoch(epoch)
 		wv = sv
 	}
 	if nil != scaler {

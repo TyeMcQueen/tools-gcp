@@ -357,7 +357,7 @@ func (pv *PromVector) Clear() {
 		if ! v.IsReadOnly() {
 			lager.Panic().Map("Non-readonly value in read-only metric map", v)
 		}
-		m[k] = v.Copy()
+		m[k] = v.Copy(mon.SamplePeriod(pv.MonDesc))
 	}
 }
 
