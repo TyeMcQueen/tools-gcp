@@ -93,8 +93,8 @@ func basicPromVec(
 		return nil, nil     // Prometheus does not support string metrics.
 	}
 	if mon.THist == pv.ValueType && mon.KGauge == pv.MetricKind {
-		lager.Warn().Map("Ignoring Histogram Gauge", md.Type)
-		return nil, nil
+		// Treat Histogram Gauge as Delta, converting to Histogram Counter
+		pv.MetricKind = mon.KDelta
 	}
 	pv.PromName = matcher.PromName()
 	return &pv, matcher
