@@ -158,7 +158,9 @@ func ShowMetric(
 
 	bucketType, buckets := "", interface{}(nil)
 	if !*AlsoEmpty || *WithCount || *ShowValues {
-		for ts := range client.StreamLatestTimeSeries(nil, proj, md, 5, "8h") {
+		for ts := range client.StreamLatestTimeSeries(
+			nil, proj, md, 5, "8h",
+		) {
 			count++
 			if *Depth < 1 {
 				if *ShowValues {

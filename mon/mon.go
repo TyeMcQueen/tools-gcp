@@ -217,7 +217,7 @@ func (m Client) GetLatestTimeSeries(
 	delta := tDelta("DELTA" == md.MetricKind)
 	kind := MetricKindLabel(md)
 	first, last := isFirst, !isLast
-	for !last {
+	for ! last {
 		start := time.Now()
 		page, err := lister.Do()
 		for nil != err && QuotaExceeded == conn.ErrorCode(err) {
