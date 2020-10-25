@@ -45,32 +45,40 @@ omitlabel:
     labels: [ proxy_continent ]
 suffix:
   - replace:
-      /open_connections:        /current_connections
-      /port_usage:              /used_ports
       /bytes_ingested:          /ingested_bytes
       /monthly_bytes_ingested:  /month_to_date_ingested_bytes
-      /max_rate:                /max_requests_per_second
-      utilization:              utilization_ratio
+      /open_connections:        /current_connections
       /uploaded_bytes_billed:   /billed_uploaded_bytes
+      /max_rate:                /max_requests_per_second
+      /port_usage:              /used_ports
+      utilization:              utilization_ratio
   - for:
-      prefix: [ loadbal ]
-      unit: s,ms,us,ns
+      only: G
     replace:
-      _latencies:       _latency_seconds
-      rtt:              rtt_seconds
+      instance_group/size:      group_instances
+      allocation/usage:         quota_usage
+      port_usage:               used_ports
+      nat_allocation_failed:    allocation_failed
+      object_count:             objects
   - for:
       prefix: [ storage ]
     replace:
       total_byte_seconds:       daily_byte_seconds
       total_bytes:              daily_bytes
   - for:
+      unit: By
+    replace:
+      gress:                    gress_bytes
+  - for:
       unit: s,ms,us,ns
     replace:
       _times:                   _seconds
   - for:
-      unit: By
+      prefix: [ loadbal ]
+      unit: s,ms,us,ns
     replace:
-      gress:                    gress_bytes
+      _latencies:               _latency_seconds
+      rtt:                      rtt_seconds
   - for:
       only: DC
     replace:
@@ -83,11 +91,3 @@ suffix:
       request_count:            requests_total
       _connections:             _connections_total
       execution_count:          executions_total
-  - for:
-      only: G
-    replace:
-      instance_group/size:      group_instances
-      allocation/usage:         quota_usage
-      port_usage:               used_ports
-      nat_allocation_failed:    allocation_failed
-      object_count:             objects

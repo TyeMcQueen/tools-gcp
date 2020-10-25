@@ -95,23 +95,6 @@ type Configuration struct {
 	// entries that will be applied to a metric will be "random".
 	Unit        map[string]string
 
-	// Suffix is a list of rules for adjusting the last part of Prometheus
-	// metric names by replacing a suffix.  Rules are applied in the order
-	// listed.  The For element determines which rules apply to which metrics.
-	//
-	// For each rule, only the longest matching suffix is applied.  If a
-	// metric matches the For element of multiple rules, then multiple rules
-	// will be applied (in the order that they are listed) to that metric.
-	//
-	// A '/' character is prepended to the last part of the Prometheus name
-	// before comparing it to each Replace key so you can use a key like
-	// "/port_usage" to match (and replace) the whole name, not just a suffix.
-	Suffix      []*struct {
-		For     Selector            // Selects which metrics to rename.
-		Replace map[string]string   // Key is suffix to be replaced with value.
-		keys    []string            // Keys from Replace, longest to shortest.
-	}
-
 	// Histogram is a list of rules for resampling histogram metrics to reduce
 	// the number of buckets or to simply ignore histogram metrics with too
 	// many buckets.  If MinBound, MinRatio, and MaxBound are all 0.0 (or
@@ -170,6 +153,23 @@ type Configuration struct {
 	OmitLabel   []struct {
 		For     Selector    // Selects which metrics to check.
 		Labels  []string    // The list of metric labels to ignore.
+	}
+
+	// Suffix is a list of rules for adjusting the last part of Prometheus
+	// metric names by replacing a suffix.  Rules are applied in the order
+	// listed.  The For element determines which rules apply to which metrics.
+	//
+	// For each rule, only the longest matching suffix is applied.  If a
+	// metric matches the For element of multiple rules, then multiple rules
+	// will be applied (in the order that they are listed) to that metric.
+	//
+	// A '/' character is prepended to the last part of the Prometheus name
+	// before comparing it to each Replace key so you can use a key like
+	// "/port_usage" to match (and replace) the whole name, not just a suffix.
+	Suffix      []*struct {
+		For     Selector            // Selects which metrics to rename.
+		Replace map[string]string   // Key is suffix to be replaced with value.
+		keys    []string            // Keys from Replace, longest to shortest.
 	}
 }
 
