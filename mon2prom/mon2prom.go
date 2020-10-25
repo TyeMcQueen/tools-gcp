@@ -89,6 +89,9 @@ func basicPromVec(
 	pv.ValueType = matcher.Type
 	pv.details.Unit = matcher.Unit
 	pv.scaler, pv.details.Scale = matcher.Scaler()
+	if mon.TString == pv.ValueType {
+		return nil, nil     // Prometheus does not support string metrics.
+	}
 	if mon.THist == pv.ValueType && mon.KGauge == pv.MetricKind {
 		lager.Warn().Map("Ignoring Histogram Gauge", md.Type)
 		return nil, nil
