@@ -146,8 +146,8 @@ func displayMetric(prom *mon2prom.PromVector, client mon.Client) {
 		fmt.Printf("    %s\n", l.String())
 	}
 
-	if 'D' == k {
-		k = 'G'
+	if k == mon.KDelta {
+		k = mon.KCount
 	}
 	if "" != scale {
 		scale = " " + scale
