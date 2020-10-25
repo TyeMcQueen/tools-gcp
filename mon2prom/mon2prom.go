@@ -20,6 +20,8 @@ import (
 )
 
 
+const ZuluTime = "2006-01-02T15:04:05Z"
+
 // Descriptive data for a GCP metric that we may want to report at start-up.
 // This structure can be freed after start-up is finished.
 type ForHumans struct {
@@ -437,7 +439,7 @@ func (pv *PromVector) Update(monClient mon.Client, ch chan<- *PromVector) {
 func (pv *PromVector) Schedule(ch chan<- *PromVector, end string) {
 	now := time.Now()
 	if "" == end {
-		end = now.In(time.UTC).Format("2006-01-02T15:04:05Z")
+		end = now.In(time.UTC).Format(ZuluTime)
 	}
 	pv.PrevEnd = end
 	epoch  := value.StampEpoch(end)
