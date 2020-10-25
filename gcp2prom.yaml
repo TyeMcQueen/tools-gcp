@@ -49,19 +49,20 @@ suffix:
       /monthly_bytes_ingested:  /month_to_date_ingested_bytes
       /open_connections:        /current_connections
       /uploaded_bytes_billed:   /billed_uploaded_bytes
-      /max_rate:                /max_requests_per_second
-      /port_usage:              /used_ports
-      utilization:              utilization_ratio
-  - for:
-      only: G
-    replace:
       instance_group/size:      group_instances
-      allocation/usage:         quota_usage
-      port_usage:               used_ports
-      nat_allocation_failed:    allocation_failed
       object_count:             objects
+      port_usage:               used_ports
   - for:
-      prefix: [ storage ]
+      prefix: [ network. ]
+    replace:
+      /max_rate:                /max_requests_per_second
+      utilization:              cpu_utilization_ratio
+  - for:
+      prefix: [ router ]
+    replace:
+      nat_allocation_failed:    allocation_failed
+  - for:
+      prefix: [ storage. ]
     replace:
       total_byte_seconds:       daily_byte_seconds
       total_bytes:              daily_bytes
@@ -70,13 +71,9 @@ suffix:
     replace:
       gress:                    gress_bytes
   - for:
-      unit: s,ms,us,ns
+      unit: s,ms,us,ns,s{}
     replace:
       _times:                   _seconds
-  - for:
-      prefix: [ loadbal ]
-      unit: s,ms,us,ns
-    replace:
       _latencies:               _latency_seconds
       rtt:                      rtt_seconds
   - for:
