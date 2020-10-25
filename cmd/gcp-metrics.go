@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/pflag"
+	"github.com/TyeMcQueen/go-lager"
 	"github.com/TyeMcQueen/go-tutl"
 	"github.com/TyeMcQueen/tools-gcp/conn"
 	"github.com/TyeMcQueen/tools-gcp/display"
@@ -157,9 +159,17 @@ func ShowMetric(
 	count = 0
 
 	bucketType, buckets := "", interface{}(nil)
+	maxPeriods := 5
+	if s := os.Getenv("TS_MAX_PERIODS"); "" != s {
+		m, err := strconv.Atoi(s)
+		if nil != err {
+			lager.Exit().Map("Non-integer value in TS_MAX_PERIODS", s)
+		}
+		maxPeriods = m
+	}
 	if !*AlsoEmpty || *WithCount || *ShowValues {
 		for ts := range client.StreamLatestTimeSeries(
-			nil, proj, md, 5, "8h",
+			nil, proj, md, maxPeriods, "8h",
 		) {
 			count++
 			if *Depth < 1 {
