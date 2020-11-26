@@ -21,9 +21,9 @@ import (
 type Set struct {
 	labelKeys,                  // Label names for a StackDriver metric.
 	resourceKeys,               // Label names for a monitored resource.
-	keptKeys        []string    // The above 2 lists minus any ignored labels.
+	keptKeys,                   // The above 2 lists minus any omitted labels.
+	SkippedKeys     []string    // Sorted list of omitted label names.
 	valueSet        Values      // The list of seen label values.
-	SkippedKeys     []string    // Sorted list of omitted keys.
 }
 
 // A label.Values contains all of the seen label values and provides a mapping
