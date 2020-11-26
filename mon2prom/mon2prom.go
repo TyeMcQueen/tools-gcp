@@ -76,6 +76,7 @@ func MetricFetcher(monClient mon.Client) (chan<- UpdateRequest, func()) {
 	ch := make(chan UpdateRequest, 5)
 	return ch, func() {
 		for ur := range ch {
+			ur.pv.noteQueueDelay(ur.queued, time.Now())
 			ur.pv.Update(monClient, ch)
 		}
 	}
