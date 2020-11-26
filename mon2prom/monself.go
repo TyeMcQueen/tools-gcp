@@ -3,6 +3,7 @@ package mon2prom
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/TyeMcQueen/go-lager"
+	"github.com/TyeMcQueen/tools-gcp/mon"
 )
 
 
@@ -10,10 +11,11 @@ type tDelta bool
 const isDelta = tDelta(true)
 
 
-var promCount = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-	Namespace: "gcp",  Subsystem: "to_prom",  Name: "values_total",
-	Help: "How many unique label sets being exported to Prometheus",
-},  []string{"project_id", "metric", "delta", "kind"})
+var promCount = mon.NewGaugeVec(
+	"gcp", "to_prom", "values_total",
+	"How many unique label sets being exported to Prometheus",
+	"project_id", "metric", "delta", "kind",
+)
 
 func init() {
 	prometheus.MustRegister(promCount)
