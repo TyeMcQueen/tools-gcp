@@ -52,6 +52,11 @@ type PromVector struct {
 }
 
 
+func TimeAsString(when time.Time) string {
+	return when.In(time.UTC).Format(ZuluTime)
+}
+
+
 // Returns a runner that updates PromVector values and a channel that each
 // PromVector uses to request an update.  Invoke the runner function once
 // all of the PromVectors have been initialized:
@@ -436,7 +441,7 @@ func (pv *PromVector) Update(monClient mon.Client, ch chan<- *PromVector) {
 func (pv *PromVector) Schedule(ch chan<- *PromVector, end string) {
 	now := time.Now()
 	if "" == end {
-		end = now.In(time.UTC).Format(ZuluTime)
+		end = TimeAsString(now)
 	}
 	pv.PrevEnd = end
 	epoch  := value.StampEpoch(end)
@@ -456,9 +461,9 @@ func (pv *PromVector) Schedule(ch chan<- *PromVector, end string) {
 		// TODO: Increment "skipping sample period" metric!!!
 		lager.Warn().Map(
 			"Skipping sample period for", pv.PromName,
-			"Next sample", when,
-			"Now", now,
-			"SamplePeriod", sample,
+			"Next sample", TimeAsString(when),
+			"Now", TimeAsString(now),
+			"SamplePeriod", display.DurationString(sample),
 		)
 		when = when.Add(sample)
 	}
