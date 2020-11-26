@@ -21,20 +21,23 @@ const isDelta   = tDelta(true)
 var buckets = []float64{
 	0.005, 0.01, 0.02, 0.04, 0.08, 0.15, 0.25, 0.5, 1, 2, 4, 8, 15,
 }
-var mdPageSeconds = NewHistVec(prometheus.HistogramOpts{
-	Namespace: "gcp",  Buckets: buckets,
-	Subsystem: "metric",  Name: "desc_page_latency_seconds",
-	Help: "Seconds it took to fetch one page of metric descriptors from GCP",
-},  "project_id", "first_page", "last_page", "code")
-var tsPageSeconds = NewHistVec(prometheus.HistogramOpts{
-	Namespace: "gcp",  Buckets: buckets,
-	Subsystem: "metric",  Name: "value_page_latency_seconds",
-	Help: "Seconds it took to fetch one page of metric values from GCP",
-},  "project_id", "delta", "kind", "first_page", "last_page", "code")
-var tsCount = NewCounterVec(prometheus.CounterOpts{
-	Namespace: "gcp",  Subsystem: "metric",  Name: "values_total",
-	Help: "How many metric values (unique label sets) fetched from GCP",
-},  "project_id", "delta", "kind")
+var mdPageSeconds = NewHistVec(
+	"gcp", "metric",  "desc_page_latency_seconds",
+	"Seconds it took to fetch one page of metric descriptors from GCP",
+	buckets,
+	"project_id", "first_page", "last_page", "code",
+)
+var tsPageSeconds = NewHistVec(
+	"gcp", "metric", "value_page_latency_seconds",
+	"Seconds it took to fetch one page of metric values from GCP",
+	buckets,
+	"project_id", "delta", "kind", "first_page", "last_page", "code",
+)
+var tsCount = NewCounterVec(
+	"gcp", "metric", "values_total",
+	"How many metric values (unique label sets) fetched from GCP",
+	"project_id", "delta", "kind",
+)
 
 
 func init() {
@@ -44,17 +47,42 @@ func init() {
 }
 
 
-func NewHistVec(
-	opts prometheus.HistogramOpts, label_keys ...string,
-) *prometheus.HistogramVec {
-	return prometheus.NewHistogramVec(opts, label_keys)
+func NewCounterVec(
+	system, subsys, name, help string, label_keys ...string,
+) *prometheus.CounterVec {
+	return prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: system, Subsystem: subsys, Name: name, Help: help,
+		},
+		label_keys,
+	)
 }
 
 
-func NewCounterVec(
-	opts prometheus.CounterOpts, label_keys ...string,
-) *prometheus.CounterVec {
-	return prometheus.NewCounterVec(opts, label_keys)
+func NewGaugeVec(
+	system, subsys, name, help string, label_keys ...string,
+) *prometheus.GaugeVec {
+	return prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: system, Subsystem: subsys, Name: name, Help: help,
+		},
+		label_keys,
+	)
+}
+
+
+func NewHistVec(
+	system, subsys, name, help string,
+	buckets []float64,
+	label_keys ...string,
+) *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: system, Subsystem: subsys, Name: name, Help: help,
+			Buckets: buckets,
+		},
+		label_keys,
+	)
 }
 
 
