@@ -1,5 +1,7 @@
 package mon2prom
 
+// In this file we handle metrics covering how well gcp2prom is functioning.
+
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/TyeMcQueen/go-lager"
@@ -12,8 +14,8 @@ const isDelta = tDelta(true)
 
 
 var promCount = mon.NewGaugeVec(
-	"gcp", "to_prom", "values_total",
-	"How many unique label sets being exported to Prometheus",
+	"gcp2prom", "metric", "values_total",
+	"How many unique label sets are being exported to Prometheus.",
 	"project_id", "metric", "delta", "kind",
 )
 
