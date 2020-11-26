@@ -6,6 +6,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -25,8 +26,8 @@ var Usage = pflag.BoolP("?", "?", false,
 	"Show usage instructions.")
 var Quiet = pflag.BoolP("quiet", "q", false,
 	"Don't show info on start-up about metrics exported.")
-var NoOp = pflag.BoolP("exit", "e", false,
-	"Just display which metrics would be exported then exit.")
+var Runners = pflag.IntP("runners", "r", 4,
+	"How many threads to run to handle metric updates.")
 var AsJson = pflag.BoolP("json", "j", false,
 	"Log metric descriptions at start-up as JSON.")
 var WithDesc = pflag.BoolP("desc", "d", false,
@@ -51,7 +52,7 @@ func usage() {
 	"  Reads GCP metrics and exports them for Prometheus to scrape.",
 	"  Every option can be abbreviated to its first letter.",
 	"  -?           Show this usage information.",
-	"  --exit       Just display which metrics would be exported then exit.",
+	"  --runners    Number of runners to use to fetch metrics (-r0 to test).",
 	"  --quiet      Don't show info on start-up about metrics exported.",
 	"  --json       Log metric descriptions (on start-up) as JSON.",
 	"  --desc       Show each metric's text description.",
@@ -234,10 +235,12 @@ func main() {
 	if 0 == count {
 		lager.Exit().List("No metrics found to export.")
 	}
-	if *NoOp {
-		lager.Exit().List("Not exporting metrics due to --exit.")
+	if *Runners < 1 {
+		lager.Exit().List("Not exporting metrics due to --runners=0.")
 	}
-	go runner()
+	for i := 0; i < *Runners; i++ {
+		go runner()
+	}
 
 	http.Handle("/metrics", promhttp.Handler())
 	lager.Fail().Map("Can't listen", http.ListenAndServe(":8080", nil))
