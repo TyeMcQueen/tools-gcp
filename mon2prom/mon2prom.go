@@ -75,9 +75,13 @@ func TimeAsString(when time.Time) string {
 func MetricFetcher(monClient mon.Client) (chan<- UpdateRequest, func()) {
 	ch := make(chan UpdateRequest, 5)
 	return ch, func() {
+		start := time.Now()
 		for ur := range ch {
-			ur.pv.noteQueueDelay(ur.queued, time.Now())
+			start = ur.pv.noteQueueEmptyDuration(start)
+			ur.pv.noteQueueDelay(ur.queued, start)
 			ur.pv.Update(monClient, ch)
+			ur.pv.noteUpdateDuration(start)
+			start = time.Now()
 		}
 	}
 }
