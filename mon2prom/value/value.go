@@ -10,6 +10,7 @@ which is only used as the key to a map[label.RuneList]value.Metric.)
 package value
 
 import (
+	"sync"
 	"time"
 
 			"github.com/golang/protobuf/proto"
@@ -98,6 +99,7 @@ type RwHistogram struct { Histogram }
 
 
 // A trivial cache so converting the same timestamp repeatedly is efficient:
+var epochLock sync.RWMutex
 var prevStamp = ""
 var prevEpoch = int64(0)
 
@@ -107,9 +109,12 @@ func StampEpoch(stamp string) int64 {
 		lager.Warn().WithStack(0, 0, 3).List("Empty epoch")
 		return 0
 	}
+	epochLock.RLock()
 	if prevStamp == stamp {
+		defer epochLock.RUnlock()
 		return prevEpoch
 	}
+	epochLock.RUnlock(); epochLock.Lock(); defer epochLock.Unlock()
 	when, err := time.Parse(time.RFC3339, stamp)
 	if nil != err {
 		lager.Warn().Map("Invalid metric timestamp", stamp, "Error", err)
