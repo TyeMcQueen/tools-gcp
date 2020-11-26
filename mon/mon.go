@@ -164,8 +164,8 @@ func (m Client) tsListLatest(
 		span = time.Duration(maxPeriods)*period
 	}
 
-	finish := time.Now().Add(-delay)
-	start := finish.Add(-span)
+	finish  := time.Now().Add(-delay).Add(period/2)
+	start   := finish.Add(-span).Add(-period/2).Add(-delay/5)
 	sStart  := start.In(time.UTC).Format(time.RFC3339)
 	sFinish := finish.In(time.UTC).Format(time.RFC3339)
 	lister :=
@@ -175,6 +175,8 @@ func (m Client) tsListLatest(
 			sStart,
 		).IntervalEndTime(
 			sFinish,
+		).View(
+			"FULL",
 		)
 	return lister
 }
