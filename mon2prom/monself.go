@@ -3,6 +3,8 @@ package mon2prom
 // In this file we handle metrics covering how well gcp2prom is functioning.
 
 import (
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/TyeMcQueen/go-lager"
 	"github.com/TyeMcQueen/tools-gcp/mon"
@@ -15,8 +17,22 @@ var promCount = mon.NewGaugeVec(
 	"project_id", "metric", "delta", "kind",
 )
 
+var buckets = []float64{
+	0.005, 0.01, 0.02, 0.04, 0.08, 0.15, 0.25, 0.5, 1, 2, 4, 8, 15, 30, 60,
+}
+
+var queueDelay = mon.NewHistVec(
+	"gcp2prom", "metric", "update_queued_seconds",
+	"How long it took for a queued metric update request to be received." +
+	"  If high, more runners are needed for the number of metrics.",
+	buckets,
+	"project_id",
+)
+
+
 func init() {
 	prometheus.MustRegister(promCount)
+	prometheus.MustRegister(queueDelay)
 }
 
 
@@ -44,5 +60,19 @@ func (pv *PromVector) promCountAdd() {
 			return
 		}
 		m.Add(float64(countDiff))
+	}()
+}
+
+
+func (pv *PromVector) noteQueueDelay(queued, now time.Time) {
+	projectID := pv.ProjectID
+	pv = nil        // Only use `pv` above this line!
+	go func() {     // Don't block caller on prometheus locks:
+		m, err := queueDelay.GetMetricWithLabelValues(projectID)
+		if nil != err {
+			lager.Fail().Map("Can't get queueDelay metric for labels", err)
+			return
+		}
+		m.Observe(float64(now.Sub(queued)) / float64(time.Second))
 	}()
 }
