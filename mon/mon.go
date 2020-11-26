@@ -221,8 +221,8 @@ func (m Client) GetLatestTimeSeries(
 		start := time.Now()
 		page, err := lister.Do()
 		for nil != err && QuotaExceeded == conn.ErrorCode(err) {
-			lager.Debug().Map("Quota exhaustion error", err)
-			lager.Warn().List("Sleeping due to quota exhaustion")
+			lager.Warn().Map(
+				"Sleeping 20s due to quota exceeded (ListTimeSeries)", err)
 			time.Sleep(20*time.Second)
 			page, err = lister.Do()
 		}
@@ -285,7 +285,8 @@ func (m Client) GetMetricDescs(
 		start := time.Now()
 		page, err := lister.Do()
 		for nil != err && QuotaExceeded == conn.ErrorCode(err) {
-			lager.Warn().List("Sleeping due to quota exhaustion")
+			lager.Warn().Map(
+				"Sleeping 20s due to quota exceeded (ListMetricDescriptors)", err)
 			time.Sleep(20*time.Second)
 			page, err = lister.Do()
 		}
