@@ -371,13 +371,7 @@ func (pv *PromVector) Clear() {
 // then atomically replaces the pointer to the old read-only map with the
 // pointer in pv.MetricMap.
 func (pv *PromVector) Publish() {
-	go promCountAdd(
-		len(*pv.MetricMap) - len(pv.ReadOnlyMap()),
-		pv.ProjectID,
-		pv.PromName,
-		tDelta(mon.KDelta == pv.MetricKind),
-		mon.MetricKindLabel(pv.MonDesc),
-	)
+	pv.promCountAdd()
 	m := *pv.MetricMap
 	for k, v := range m {
 		if ! v.IsReadOnly() {

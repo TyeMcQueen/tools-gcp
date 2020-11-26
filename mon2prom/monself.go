@@ -9,10 +9,6 @@ import (
 )
 
 
-type tDelta bool
-const isDelta = tDelta(true)
-
-
 var promCount = mon.NewGaugeVec(
 	"gcp2prom", "metric", "values_total",
 	"How many unique label sets are being exported to Prometheus.",
@@ -32,19 +28,21 @@ func bLabel(b bool) string {
 }
 
 
-func promCountAdd(
-	countDiff   int,
-	projectID   string,
-	metric      string,
-	isDelta     tDelta,
-	kind        string,
-) {
-	m, err := promCount.GetMetricWithLabelValues(
-		projectID, metric, bLabel(bool(isDelta)), kind,
-	)
-	if nil != err {
-		lager.Fail().Map("Can't get promtCount metric for labels", err)
-		return
-	}
-	m.Add(float64(countDiff))
+func (pv *PromVector) promCountAdd() {
+	countDiff := len(*pv.MetricMap) - len(pv.ReadOnlyMap())
+	projectID := pv.ProjectID
+	metric := pv.PromName
+	isDelta := bLabel(mon.KDelta == pv.MetricKind)
+	kind := mon.MetricKindLabel(pv.MonDesc)
+	pv = nil        // Only use `pv` above this line!
+	go func() {     // Don't block caller on prometheus locks:
+		m, err := promCount.GetMetricWithLabelValues(
+			projectID, metric, isDelta, kind,
+		)
+		if nil != err {
+			lager.Fail().Map("Can't get promtCount metric for labels", err)
+			return
+		}
+		m.Add(float64(countDiff))
+	}()
 }
