@@ -26,7 +26,7 @@ var Usage = pflag.BoolP("?", "?", false,
 	"Show usage instructions.")
 var Quiet = pflag.BoolP("quiet", "q", false,
 	"Don't show info on start-up about metrics exported.")
-var Runners = pflag.IntP("runners", "r", 4,
+var Runners = pflag.IntP("runners", "r", -1,
 	"How many threads to run to handle metric updates.")
 var AsJson = pflag.BoolP("json", "j", false,
 	"Log metric descriptions at start-up as JSON.")
@@ -62,6 +62,8 @@ func usage() {
 	"  --{only|not}={CDGHFIBS}",
 	"      Only export (or exclude) metrics using any of the following types:",
 	"          Cumulative Delta Gauge Histogram Float Int Bool String",
+	"  Prepend 'G2P_' to long option name to get environment variable that",
+	"    can be used in place of the option (ie. G2P_METRIC=loadbal).",
 	"  Format of descriptions of metrics to be exported:",
 	"    Count KindType Path Unit Delay+Period",
 	"    [Desc]",
@@ -83,6 +85,47 @@ func usage() {
 	"    Scale  How the metric's values are multiplied/divided for Prometheus.",
 	))
 	os.Exit(1)
+}
+
+
+func EnvOpts() {
+	if ! *Quiet && "" != os.Getenv("G2P_QUIET") {
+		*Quiet = true
+	}
+	if ! *AsJson && "" != os.Getenv("G2P_JSON") {
+		*AsJson = true
+	}
+	if ! *WithDesc && "" != os.Getenv("G2P_DESC") {
+		*WithDesc = true
+	}
+	if ! *WithBuckets && "" != os.Getenv("G2P_BUCKETS") {
+		*WithBuckets = true
+	}
+	if env := os.Getenv("G2P_UNIT"); "" == *OnlyUnits && "" != env {
+		*OnlyUnits = env
+	}
+	if env := os.Getenv("G2P_ONLY"); "" == *OnlyTypes && "" != env {
+		*OnlyTypes = env
+	}
+	if env := os.Getenv("G2P_NOT"); "" == *NotTypes && "" != env {
+		*NotTypes = env
+	}
+	if env := os.Getenv("G2P_METRIC"); "" == *Prefix && "" != env {
+		*Prefix = env
+	}
+	if env := os.Getenv("G2P_RUNNERS"); -1 == *Runners && "" != env {
+		if r, err := strconv.Atoi(env); nil != err {
+			lager.Exit().Map("Non-integer G2P_RUNNERS value", env, "Error", err)
+		} else {
+			*Runners = r
+		}
+		if *Runners < 0 {
+			lager.Exit().Map("Negative G2P_RUNNERS value", r)
+		}
+	}
+	if *Runners < 0 {
+		*Runners = 4
+	}
 }
 
 
@@ -205,6 +248,7 @@ func main() {
 	if 1 < len(pflag.Args()) || *Usage {
 		usage()
 	}
+	EnvOpts()
 	*OnlyTypes = strings.ToUpper(*OnlyTypes)
 	*NotTypes = strings.ToUpper(*NotTypes)
 	if "" != *Prefix {
