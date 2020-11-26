@@ -165,7 +165,7 @@ func export(
 	proj        string,
 	client      mon.Client,
 	md          *monitoring.MetricDescriptor,
-	ch          chan<- *mon2prom.PromVector,
+	ch          chan<- mon2prom.UpdateRequest,
 ) bool {
 	k, t, u := mon.MetricAbbrs(md)
 	if "" != *OnlyUnits && ! PickUnit[u] ||
