@@ -29,10 +29,27 @@ var queueDelay = mon.NewHistVec(
 	"project_id",
 )
 
+var queueEmptyDuration = mon.NewHistVec(
+	"gcp2prom", "metric", "update_queue_empty_seconds",
+	"How long update thread waited for next update request.",
+	buckets,
+	"project_id",
+)
+
+var updateDuration = mon.NewHistVec(
+	"gcp2prom", "metric", "update_processing_seconds",
+	"How long it took to fetch and publish updated metric values." +
+	"  Useful for figuring out why update threads may be busy.",
+	buckets,
+	"project_id", "metric", "delta", "kind",
+)
+
 
 func init() {
 	prometheus.MustRegister(promCount)
 	prometheus.MustRegister(queueDelay)
+	prometheus.MustRegister(queueEmptyDuration)
+	prometheus.MustRegister(updateDuration)
 }
 
 
@@ -75,4 +92,42 @@ func (pv *PromVector) noteQueueDelay(queued, now time.Time) {
 		}
 		m.Observe(float64(now.Sub(queued)) / float64(time.Second))
 	}()
+}
+
+
+func (pv *PromVector) noteQueueEmptyDuration(start time.Time) time.Time {
+	projectID := pv.ProjectID
+	now := time.Now()
+	pv = nil        // Only use `pv` above this line!
+	go func() {     // Don't block caller on prometheus locks:
+		m, err := queueEmptyDuration.GetMetricWithLabelValues(projectID)
+		if nil != err {
+			lager.Fail().Map(
+				"Can't get queueEmptyDuration metric for labels", err)
+			return
+		}
+		m.Observe(float64(now.Sub(start)) / float64(time.Second))
+	}()
+	return now
+}
+
+
+func (pv *PromVector) noteUpdateDuration(start time.Time) time.Time {
+	projectID := pv.ProjectID
+	metric := pv.PromName
+	isDelta := bLabel(mon.KDelta == pv.MetricKind)
+	kind := mon.MetricKindLabel(pv.MonDesc)
+	now := time.Now()
+	pv = nil        // Only use `pv` above this line!
+	go func() {     // Don't block caller on prometheus locks:
+		m, err := updateDuration.GetMetricWithLabelValues(
+			projectID, metric, isDelta, kind,
+		)
+		if nil != err {
+			lager.Fail().Map("Can't get updateDuration metric for labels", err)
+			return
+		}
+		m.Observe(float64(now.Sub(start)) / float64(time.Second))
+	}()
+	return now
 }
