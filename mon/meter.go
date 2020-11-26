@@ -1,5 +1,7 @@
 package mon
 
+// In this file we handle Prometheus metrics about fetching metrics from GCP.
+
 import (
 	"strconv"
 	"time"
@@ -22,19 +24,19 @@ var buckets = []float64{
 	0.005, 0.01, 0.02, 0.04, 0.08, 0.15, 0.25, 0.5, 1, 2, 4, 8, 15,
 }
 var mdPageSeconds = NewHistVec(
-	"gcp", "metric",  "desc_page_latency_seconds",
+	"gcpapi", "metric",  "desc_page_latency_seconds",
 	"Seconds it took to fetch one page of metric descriptors from GCP",
 	buckets,
 	"project_id", "first_page", "last_page", "code",
 )
 var tsPageSeconds = NewHistVec(
-	"gcp", "metric", "value_page_latency_seconds",
+	"gcpapi", "metric", "value_page_latency_seconds",
 	"Seconds it took to fetch one page of metric values from GCP",
 	buckets,
 	"project_id", "delta", "kind", "first_page", "last_page", "code",
 )
 var tsCount = NewCounterVec(
-	"gcp", "metric", "values_total",
+	"gcpapi", "metric", "values_total",
 	"How many metric values (unique label sets) fetched from GCP",
 	"project_id", "delta", "kind",
 )
