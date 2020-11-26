@@ -51,6 +51,12 @@ type PromVector struct {
 	ReadOnly        atomic.Value        // Read-only map for exporting from.
 }
 
+// What gets sent to request a metric be updated.
+type UpdateRequest struct {
+	pv      *PromVector
+	queued  time.Time
+}
+
 
 func TimeAsString(when time.Time) string {
 	return when.In(time.UTC).Format(ZuluTime)
@@ -66,11 +72,11 @@ func TimeAsString(when time.Time) string {
 //          mon2prom.NewVec(projectID, monClient, md, ch)
 //      }
 //      go runner()
-func MetricFetcher(monClient mon.Client) (chan<- *PromVector, func()) {
-	ch := make(chan *PromVector, 5)
+func MetricFetcher(monClient mon.Client) (chan<- UpdateRequest, func()) {
+	ch := make(chan UpdateRequest, 5)
 	return ch, func() {
-		for pv := range ch {
-			pv.Update(monClient, ch)
+		for ur := range ch {
+			ur.pv.Update(monClient, ch)
 		}
 	}
 }
@@ -266,7 +272,7 @@ func NewVec(
 	projectID   string,
 	monClient   mon.Client,
 	md          *sd.MetricDescriptor,
-	ch          chan<- *PromVector,
+	ch          chan<- UpdateRequest,
 ) *PromVector {
 	pv, matcher := basicPromVec(projectID, md)
 	if nil == pv {
@@ -405,7 +411,7 @@ func (pv *PromVector) Populate(ts *sd.TimeSeries) {
 
 // Iterates over all of the TimeSeries values for a single StackDriver
 // metric and Populates() them into the metric map.
-func (pv *PromVector) Update(monClient mon.Client, ch chan<- *PromVector) {
+func (pv *PromVector) Update(monClient mon.Client, ch chan<- UpdateRequest) {
 	pv.Clear()
 	last := pv.PrevEnd
 	count := 0
@@ -438,7 +444,7 @@ func (pv *PromVector) Update(monClient mon.Client, ch chan<- *PromVector) {
 // We compute when the next sample period should be available (plus a few
 // random seconds to reduce "thundering herd") and schedule pv to be sent
 // to the metric runner's channel at that time.
-func (pv *PromVector) Schedule(ch chan<- *PromVector, end string) {
+func (pv *PromVector) Schedule(ch chan<- UpdateRequest, end string) {
 	now := time.Now()
 	if "" == end {
 		end = TimeAsString(now)
@@ -470,7 +476,7 @@ func (pv *PromVector) Schedule(ch chan<- *PromVector, end string) {
 	time.AfterFunc(
 		when.Sub(now),  // Convert scheduled time to delay duration.
 		func() {
-			ch <- pv    // TODO: Add `when` to this to monitor delay
+			ch <- UpdateRequest{pv: pv, queued: time.Now()}
 		},
 	)
 }
