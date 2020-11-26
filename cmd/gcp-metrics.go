@@ -169,14 +169,11 @@ func ShowMetric(
 	}
 	if !*AlsoEmpty || *WithCount || *ShowValues {
 		for ts := range client.StreamLatestTimeSeries(
-			nil, proj, md, maxPeriods, "8h",
+			nil, proj, md, maxPeriods, "25h",
 		) {
 			count++
 			if *Depth < 1 {
 				if *ShowValues {
-					if 1 < len(ts.Points) {
-						ts.Points = ts.Points[0:1]
-					}
 					display.DumpJson("", ts)
 				} else if 1 == count && mon.THist == t {
 					bucketType, buckets = display.BucketInfo(ts.Points[0].Value)
