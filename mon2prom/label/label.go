@@ -15,7 +15,6 @@ import (
 	"google.golang.org/api/monitoring/v3"
 )
 
-
 // A label.Set tracks the possible label names and seen label values for a
 // metric.
 type Set struct {
@@ -26,10 +25,11 @@ type Set struct {
 	valueSet        Values      // The list of seen label values.
 }
 
-// A label.Values contains all of the seen label values and provides a mapping
-// between each unique value and a rune.  This allows a list of label values
-// to be recorded very compactly which also provides an efficient way to find
-// the prior metric having identical label values.
+// A label.Values contains all of the seen label values (regardless of label
+// name) and provides a mapping between each unique value and a rune.  This
+// allows a list of label values to be recorded very compactly (in a short
+// string) which also provides an efficient way to find the prior metric
+// having identical label values (via a map[string] type).
 type Values struct {
 	values  []string
 	valPos  map[string]rune
@@ -38,7 +38,6 @@ type Values struct {
 // A RuneList is just a string.  It is used to store a list of values of type
 // `rune`.
 type RuneList string
-
 
 // Converts a RuneList into a string containing the (decimal) rune values
 // separated by "."s.  Makes a RuneList easy to read instead of a string full
@@ -53,12 +52,10 @@ func (rl RuneList) String() string {
 	return b.String()
 }
 
-
 // Returns 1 plus the count of already-seen unique label values.
 func (vs *Values) Len() int {
 	return len(vs.values)
 }
-
 
 // Converts a label value into a rune.
 func (vs *Values) Rune(val string) rune {
@@ -70,7 +67,6 @@ func (vs *Values) Rune(val string) rune {
 	vs.values = append(vs.values, val)
 	return p
 }
-
 
 // Converts a rune into a label value.  Will panic() if the rune value is
 // out-of-range.
@@ -84,14 +80,11 @@ func (vs *Values) Value(pos rune) string {
 	return vs.values[pos]
 }
 
-
 // Returns the number of kept label names.
 func (ls *Set) Len() int { return len(ls.keptKeys) }
 
-
 // Returns the list of kept label names.
 func (ls *Set) KeptKeys() []string { return ls.keptKeys }
-
 
 // Converts a RuneList into a list of LabelPairs ready to export.
 func (ls *Set) LabelPairs(rl RuneList) []*dto.LabelPair {
@@ -105,7 +98,6 @@ func (ls *Set) LabelPairs(rl RuneList) []*dto.LabelPair {
 	}
 	return pairs
 }
-
 
 // Initializes a new label.Set to track the passed-in metric labels and
 // resource labels, ignoring any labels in `skipKeys`.
@@ -173,7 +165,6 @@ func (ls *Set) Init(
 	ls.keptKeys = append(ls.labelKeys, ls.resourceKeys...)
 }
 
-
 // Converts the label values from a TimeSeries into a RuneList.
 func (ls *Set) RuneList(
 	metricLabels    map[string]string,
@@ -201,7 +192,6 @@ func (ls *Set) RuneList(
 
 	return RuneList(string(b[:o]))
 }
-
 
 // Converts a RuneList into a list of just the label value strings.
 func (ls *Set) ValueList(rl RuneList) []string {

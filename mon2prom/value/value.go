@@ -22,13 +22,14 @@ import (
 	sd      "google.golang.org/api/monitoring/v3"   // StackDriver
 )
 
-
 // A minimal object that can be collected as a prometheus metric.
 type Writer struct {
 	PDesc   *prom.Desc
 	Metric  dto.Metric
 }
+
 func (mw Writer) Desc() *prom.Desc { return mw.PDesc }
+
 func (mw Writer) Write(out *dto.Metric) error {
 	*out = mw.Metric
 	return nil
@@ -76,10 +77,11 @@ type RwMetric interface {
 // A value.Simple just contains a float64 metric value and a timestamp.  It
 // implmenets the value.Metric interface.  It is read-only (but can be
 // converted into a value.RwSimple).
+//
 type Simple struct {
-	epoch       int64   // The epoch seconds of end of the sample period.
-	promEpoch   int64   // The epoch for Prometheus (incremented for Counters).
-	val         float64
+	epoch     int64   // The epoch seconds of end of the sample period.
+	promEpoch int64   // The epoch for Prometheus (incremented for Counters).
+	val       float64
 }
 
 // A value.RwSimple is a value.Simple that can receive updates.
@@ -88,6 +90,7 @@ type RwSimple struct { Simple }
 // A value.Histogram holds the current state of a histogram metric.  It
 // implmenets the value.Metric interface.  It is read-only (but can be
 // converted into a value.RwHistogram).
+//
 type Histogram struct {
 	Simple
 	SampleCount uint64
@@ -96,7 +99,6 @@ type Histogram struct {
 
 // A value.RwHistogram is a value.Histogram that can receive updates.
 type RwHistogram struct { Histogram }
-
 
 // A trivial cache so converting the same timestamp repeatedly is efficient:
 var epochLock sync.RWMutex
@@ -125,7 +127,6 @@ func StampEpoch(stamp string) int64 {
 	return prevEpoch
 }
 
-
 func (_ *Simple)       IsReadOnly() bool { return true }
 func (_ *Histogram)    IsReadOnly() bool { return true }
 func (_ *RwSimple)     IsReadOnly() bool { return false }
@@ -141,7 +142,7 @@ func (hv *RwHistogram) AddFloat(f float64) { hv.val += f }
 func (sv *RwSimple)    SetEpoch(e int64) { sv.epoch = e; sv.promEpoch = e }
 func (hv *RwHistogram) SetEpoch(e int64) { hv.epoch = e; hv.promEpoch = e }
 
-// Each of the following 4 metrics also work on the corresponding Rw* type:
+// Each of the following 4 methods also work on the corresponding Rw* type:
 
 func (sv *Simple)      AsReadOnly() Metric { return sv }
 func (hv *Histogram)   AsReadOnly() Metric { return hv }
@@ -158,8 +159,7 @@ func (hv *Histogram) Copy(samplePeriod time.Duration) Metric {
 	return &copy
 }
 
-
-// Export() returns a Protobuf version of a simple metric.
+// Simple's Export() returns a Protobuf version of a simple metric.
 func (sv *Simple) Export(
 	metricKind  mon.MetricKind,
 	valueType   mon.ValueType,
@@ -183,8 +183,7 @@ func (sv *Simple) Export(
 	return m
 }
 
-
-// Export() returns a Protobuf version of a histogram metric.
+// Histogram's Export() returns a Protobuf version of a histogram metric.
 func (hv *Histogram) Export(
 	metricKind  mon.MetricKind,
 	valueType   mon.ValueType,
@@ -210,11 +209,11 @@ func (hv *Histogram) Export(
 	return m
 }
 
-
-// Convert() converts a StackDriver Distribution value into a Prometheus
-// histogram value which is then added to the invocing value.RwHistogram.
-// The sum of the (new) observations is returned so the caller can scale it
-// and then add it in as well.
+// Convert() converts a GCP Distribution value into a Prometheus histogram
+// value which is then added to the invoking value.RwHistogram.  The sum of
+// the (new) observations is returned so the caller can scale it and then add
+// it in as well.
+//
 func (hv *RwHistogram) Convert(
 	subBuckets  []int,
 	dv          *sd.Distribution,
@@ -236,19 +235,19 @@ func (hv *RwHistogram) Convert(
 	return dv.Mean * float64(dv.Count)
 }
 
-
-// Populate() takes a StackDriver metric value (*TimeSeries) and computes a
-// label.RuneList from the label values (both metric and resource labels) and
-// converts the numeric data to a value.Metric and then stores that in the
-// metricMap using the RuneList as the key.
+// Populate() takes a GCP metric value (*TimeSeries) and computes a
+// label.RuneList from the label values (both metric and resource labels)
+// and converts the numeric data to a value.Metric and then stores that
+// in the metricMap using the RuneList as the key.
+//
 func Populate(
-	metricMap   map[label.RuneList]Metric,
-	metricKind  mon.MetricKind,
-	valueType   mon.ValueType,
-	scaler      func(float64) float64,
-	ls          *label.Set,
-	subBuckets  []int,
-	ts          *sd.TimeSeries,
+	metricMap  map[label.RuneList]Metric, // Where to store the value.Metric
+	metricKind mon.MetricKind,
+	valueType  mon.ValueType,
+	scaler     func(float64) float64,     // Optional unit change function
+	ls         *label.Set,                // Tracks label values seen
+	subBuckets []int,                     // N GCP buckets per Prom bucket
+	ts         *sd.TimeSeries,
 ) {
 	rl := ls.RuneList(ts.Metric.Labels, ts.Resource.Labels)
 	lager.Debug().Map("RuneList", rl, "Labels", ts.Metric.Labels,

@@ -10,7 +10,6 @@ import (
 	"github.com/TyeMcQueen/tools-gcp/mon"
 )
 
-
 var promCount = mon.NewGaugeVec(
 	"gcp2prom", "metric", "values_total",
 	"How many unique label sets are being exported to Prometheus.",
@@ -44,7 +43,6 @@ var updateDuration = mon.NewHistVec(
 	"project_id", "metric", "delta", "kind",
 )
 
-
 func init() {
 	prometheus.MustRegister(promCount)
 	prometheus.MustRegister(queueDelay)
@@ -52,14 +50,12 @@ func init() {
 	prometheus.MustRegister(updateDuration)
 }
 
-
 func bLabel(b bool) string {
 	if b {
 		return "true"
 	}
 	return "false"
 }
-
 
 func (pv *PromVector) promCountAdd() {
 	countDiff := len(*pv.MetricMap) - len(pv.ReadOnlyMap())
@@ -80,7 +76,6 @@ func (pv *PromVector) promCountAdd() {
 	}()
 }
 
-
 func (pv *PromVector) noteQueueDelay(queued, now time.Time) {
 	projectID := pv.ProjectID
 	pv = nil        // Only use `pv` above this line!
@@ -93,7 +88,6 @@ func (pv *PromVector) noteQueueDelay(queued, now time.Time) {
 		m.Observe(float64(now.Sub(queued)) / float64(time.Second))
 	}()
 }
-
 
 func (pv *PromVector) noteQueueEmptyDuration(start time.Time) time.Time {
 	projectID := pv.ProjectID
@@ -110,7 +104,6 @@ func (pv *PromVector) noteQueueEmptyDuration(start time.Time) time.Time {
 	}()
 	return now
 }
-
 
 func (pv *PromVector) noteUpdateDuration(start time.Time) time.Time {
 	projectID := pv.ProjectID

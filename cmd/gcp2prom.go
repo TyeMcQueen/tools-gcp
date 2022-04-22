@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spf13/pflag"
 	"github.com/TyeMcQueen/go-lager"
 	"github.com/TyeMcQueen/go-tutl"
 	"github.com/TyeMcQueen/tools-gcp/conn"
@@ -18,9 +17,9 @@ import (
 	"github.com/TyeMcQueen/tools-gcp/mon2prom"
 	"github.com/TyeMcQueen/tools-gcp/mon2prom/config"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/spf13/pflag"
 	"google.golang.org/api/monitoring/v3"
 )
-
 
 var Usage = pflag.BoolP("?", "?", false,
 	"Show usage instructions.")
@@ -45,60 +44,58 @@ var Prefix = pflag.StringP("metric", "m", "",
 	"Only export metrics that match the listed prefix(es) (comma-separated).")
 var Prefixes []string
 
-
 func usage() {
 	fmt.Println(display.Join("\n",
-	"gcp2prom [-eqjdb] [-{muon}=...] [project-id]",
-	"  Reads GCP metrics and exports them for Prometheus to scrape.",
-	"  Every option can be abbreviated to its first letter.",
-	"  -?           Show this usage information.",
-	"  --runners    Number of runners to use to fetch metrics (-r0 to test).",
-	"  --quiet      Don't show info on start-up about metrics exported.",
-	"  --json       Log metric descriptions (on start-up) as JSON.",
-	"  --desc       Show each metric's text description.",
-	"  --buckets    Show bucket information about any histogram metrics.",
-	"  --metric=PRE Only export metrics with these prefix(es), comma-separated.",
-	"  --unit=U,... Only export metrics with matching units, comma-separated.",
-	"  --{only|not}={CDGHFIBS}",
-	"      Only export (or exclude) metrics using any of the following types:",
-	"          Cumulative Delta Gauge Histogram Float Int Bool String",
-	"  Prepend 'G2P_' to long option name to get environment variable that",
-	"    can be used in place of the option (ie. G2P_METRIC=loadbal).",
-	"  Format of descriptions of metrics to be exported:",
-	"    Count KindType Path Unit Delay+Period",
-	"    [Desc]",
-	"    [GCPBuckets]",
-	"    [-Label -Label ...]",
-	"    Count KindType Prom [Scale]",
-	"    [PromBuckets]",
-	"  Where:",
-	"    Count  Number of distinct label combinations.",
-	"    Kind   MetricKind: D, C, or G (delta, cumulative, gauge).",
-	"    Type   ValueType:  H, F, I, B, or S (hist, float, int, bool, str).",
-	"    Unit   The units the metric is declared to be measured in.",
-	"           '' becomes '-' and values like '{Bytes}' become '{}'.",
-	"    Delay  Duration before a sample becomes available.",
-	"    Period Duration of each sample period.",
-	"    Path   The full path of the GCP metric type.",
-	"    -Label A label name that will be dropped from the exported metric.",
-	"    Prom   The metric name exported to Prometheus.",
-	"    Scale  How the metric's values are multiplied/divided for Prometheus.",
+		"gcp2prom [-eqjdb] [-{muon}=...] [project-id]",
+		"  Reads GCP metrics and exports them for Prometheus to scrape.",
+		"  Every option can be abbreviated to its first letter.",
+		"  -?           Show this usage information.",
+		"  --runners    Number of runners to use to fetch metrics (-r0 to test).",
+		"  --quiet      Don't show info on start-up about metrics exported.",
+		"  --json       Log metric descriptions (on start-up) as JSON.",
+		"  --desc       Show each metric's text description.",
+		"  --buckets    Show bucket information about any histogram metrics.",
+		"  --metric=PRE Only export metrics with these prefix(es), comma-separated.",
+		"  --unit=U,... Only export metrics with matching units, comma-separated.",
+		"  --{only|not}={CDGHFIBS}",
+		"      Only export (or exclude) metrics using any of the following types:",
+		"          Cumulative Delta Gauge Histogram Float Int Bool String",
+		"  Prepend 'G2P_' to long option name to get environment variable that",
+		"    can be used in place of the option (ie. G2P_METRIC=loadbal).",
+		"  Format of descriptions of metrics to be exported:",
+		"    Count KindType Path Unit Delay+Period",
+		"    [Desc]",
+		"    [GCPBuckets]",
+		"    [-Label -Label ...]",
+		"    Count KindType Prom [Scale]",
+		"    [PromBuckets]",
+		"  Where:",
+		"    Count  Number of distinct label combinations.",
+		"    Kind   MetricKind: D, C, or G (delta, cumulative, gauge).",
+		"    Type   ValueType:  H, F, I, B, or S (hist, float, int, bool, str).",
+		"    Unit   The units the metric is declared to be measured in.",
+		"           '' becomes '-' and values like '{Bytes}' become '{}'.",
+		"    Delay  Duration before a sample becomes available.",
+		"    Period Duration of each sample period.",
+		"    Path   The full path of the GCP metric type.",
+		"    -Label A label name that will be dropped from the exported metric.",
+		"    Prom   The metric name exported to Prometheus.",
+		"    Scale  How the metric's values are multiplied/divided for Prometheus.",
 	))
 	os.Exit(1)
 }
 
-
 func EnvOpts() {
-	if ! *Quiet && "" != os.Getenv("G2P_QUIET") {
+	if !*Quiet && "" != os.Getenv("G2P_QUIET") {
 		*Quiet = true
 	}
-	if ! *AsJson && "" != os.Getenv("G2P_JSON") {
+	if !*AsJson && "" != os.Getenv("G2P_JSON") {
 		*AsJson = true
 	}
-	if ! *WithDesc && "" != os.Getenv("G2P_DESC") {
+	if !*WithDesc && "" != os.Getenv("G2P_DESC") {
 		*WithDesc = true
 	}
-	if ! *WithBuckets && "" != os.Getenv("G2P_BUCKETS") {
+	if !*WithBuckets && "" != os.Getenv("G2P_BUCKETS") {
 		*WithBuckets = true
 	}
 	if env := os.Getenv("G2P_UNIT"); "" == *OnlyUnits && "" != env {
@@ -128,7 +125,6 @@ func EnvOpts() {
 	}
 }
 
-
 func displayMetric(prom *mon2prom.PromVector, client mon.Client) {
 	k, t := prom.MetricKind, prom.ValueType
 	u, scale, gcpCount, bucketType, gcpBuckets := prom.ForHumans()
@@ -137,29 +133,29 @@ func displayMetric(prom *mon2prom.PromVector, client mon.Client) {
 		if mon.THist == t {
 			lager.Info().Map(
 				"metricDescriptor", prom.MonDesc,
-				"gcpCount",         gcpCount,
-				"gcpBucketType",    bucketType,
-				"gcpBuckets",       gcpBuckets,
-				"kind",             string([]byte{byte(k)}),
-				"type",             string([]byte{byte(t)}),
-				"unit",             u,
-				"skippedKeys",      prom.Set.SkippedKeys,
-				"prometheusName",   prom.PromName,
-				"scale",            scale,
-				"promCount",        len(*prom.MetricMap),
-				"promBuckets",      prom.BucketBounds,
+				"gcpCount", gcpCount,
+				"gcpBucketType", bucketType,
+				"gcpBuckets", gcpBuckets,
+				"kind", string([]byte{byte(k)}),
+				"type", string([]byte{byte(t)}),
+				"unit", u,
+				"skippedKeys", prom.Set.SkippedKeys,
+				"prometheusName", prom.PromName,
+				"scale", scale,
+				"promCount", len(*prom.MetricMap),
+				"promBuckets", prom.BucketBounds,
 			)
 		} else {
 			lager.Info().Map(
 				"metricDescriptor", prom.MonDesc,
-				"gcpCount",         gcpCount,
-				"kind",             string([]byte{byte(k)}),
-				"type",             string([]byte{byte(t)}),
-				"unit",             u,
-				"skippedKeys",      prom.Set.SkippedKeys,
-				"prometheusName",   prom.PromName,
-				"scale",            scale,
-				"promCount",        len(*prom.MetricMap),
+				"gcpCount", gcpCount,
+				"kind", string([]byte{byte(k)}),
+				"type", string([]byte{byte(t)}),
+				"unit", u,
+				"skippedKeys", prom.Set.SkippedKeys,
+				"prometheusName", prom.PromName,
+				"scale", scale,
+				"promCount", len(*prom.MetricMap),
 			)
 		}
 		return
@@ -204,17 +200,16 @@ func displayMetric(prom *mon2prom.PromVector, client mon.Client) {
 	fmt.Printf("\n")
 }
 
-
 func export(
-	proj        string,
-	client      mon.Client,
-	md          *monitoring.MetricDescriptor,
-	ch          chan<- mon2prom.UpdateRequest,
+	proj string,
+	client mon.Client,
+	md *monitoring.MetricDescriptor,
+	ch chan<- mon2prom.UpdateRequest,
 ) bool {
 	k, t, u := mon.MetricAbbrs(md)
-	if "" != *OnlyUnits && ! PickUnit[u] ||
-	   "" != *OnlyTypes && ! mon.Contains(*OnlyTypes, k, t) ||
-	   "" != *NotTypes && mon.Contains(*NotTypes, k, t) {
+	if "" != *OnlyUnits && !PickUnit[u] ||
+		"" != *OnlyTypes && !mon.Contains(*OnlyTypes, k, t) ||
+		"" != *NotTypes && mon.Contains(*NotTypes, k, t) {
 		return false
 	}
 	if 0 < len(Prefixes) {
@@ -225,7 +220,7 @@ func export(
 				break
 			}
 		}
-		if ! matched {
+		if !matched {
 			return false
 		}
 	}
@@ -233,12 +228,11 @@ func export(
 	if nil == prom {
 		return false
 	}
-	if ! *Quiet {
+	if !*Quiet {
 		displayMetric(prom, client)
 	}
 	return true
 }
-
 
 func main() {
 	if "" != os.Getenv("PANIC_ON_INT") {
