@@ -6,6 +6,7 @@ subsystem:
   bigquery.googleapis.com/slots/:               bigquery_slot
   bigquery.googleapis.com/storage/:             bigquery_store
   cloudfunctions.googleapis.com/function/:      cloud_function
+  cloudsql.googleapis.com/database/:            sql_database
   compute.googleapis.com/firewall/:             firewall
   loadbalancing.googleapis.com/https/:          lb_https
   loadbalancing.googleapis.com/https/internal/: ilb_https
@@ -52,6 +53,23 @@ suffix:
       instance_group/size:      group_instances
       object_count:             objects
       port_usage:               used_ports
+  - for:
+      prefix: [ cloudsql ]
+    replace:
+      available_for_failover:       failover_availability
+      instance_state:               instance_is_up
+      num_backends:                 backends
+      pages_dirty:                  dirty_pages
+      pages_free:                   free_pages
+      pages_read:                   read_pages
+      pages_total:                  total_pages
+      pages_written:                written_pages
+      replication/replica_byte_lag: replica_lag_bytes
+      replication/replica_lag:      replica_lag
+      seconds_behind_master:        behind_master_seconds
+      slave_io_running_state:       slave_io_is_running
+      slave_sql_running_state:      slave_sql_is_running
+      transaction_count:            transactions
   - for:
       prefix: [ network. ]
     replace:
