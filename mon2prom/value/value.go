@@ -256,12 +256,13 @@ func Populate(
 	ls         *label.Set,                // Tracks label values seen
 	subBuckets []int,                     // N GCP buckets per Prom bucket
 	ts         *sd.TimeSeries,
+	pt         *sd.Point,                 // Which point from above to add
 ) {
 	rl := ls.RuneList(ts.Metric.Labels, ts.Resource.Labels)
 	lager.Debug().Map("RuneList", rl, "Labels", ts.Metric.Labels,
 		"Resource", ts.Resource.Labels)
 	mv := metricMap[rl]
-	epoch := StampEpoch(ts.Points[0].Interval.EndTime)
+	epoch := StampEpoch(pt.Interval.EndTime)
 	if nil != mv && mv.IsReadOnly() && epoch == mv.GcpEpoch() {
 		// If not read-only, then epoch _should_ match since metric has
 		// already received an update this cycle.
@@ -270,8 +271,11 @@ func Populate(
 
 	var wv RwMetric
 	var f float64
-	v := ts.Points[0].Value
+	v := pt.Value
 	if mon.THist == valueType {
+		// We add in all intermediate points for Histograms since they are
+		// always being converted from a Delta-like value to a Counter-like
+		// value so we want a sum of all deltas since we started:
 		var hv *RwHistogram
 		if nil == mv {
 			hv = new(RwHistogram)
@@ -286,27 +290,44 @@ func Populate(
 	} else {
 		sv := new(RwSimple)
 		if nil != mv {
-			sv.AddFloat(mv.Float())
-		}
-		switch valueType {
-		case mon.TBool:
-			if 0.0 == sv.Float() && nil != v.BoolValue && *v.BoolValue {
-				f = 1.0
+			if epoch == mv.GcpEpoch() { // This was updated during this round:
+				// We must have omitted labels so multiple points will combine:
+				sv.AddFloat(mv.Float())
+			} else {
+				// We got points from a prior period not captured last time:
+				if mon.KDelta == metricKind {
+					// For Delta values, we want to sum all points
+					sv.AddFloat(mv.Float())
+				} else if epoch < mv.GcpEpoch() {
+					// pt is from older period, so use mv instead:
+					sv.AddFloat(mv.Float())
+					v = nil // Ignore v from pt so only sv is included.
+				}
+				// Else mv is the old one so ignore it.
 			}
-		case mon.TFloat:
-			f = *v.DoubleValue
-		case mon.TInt:
-			f = float64(*v.Int64Value)
-	//  case mon.TString:
-		default:
-			lager.Panic().Map("ValueType not in [HFIB]", valueType)
 		}
-		sv.SetEpoch(epoch)
+		if nil != v {
+			switch valueType {
+			case mon.TBool:
+				if 0.0 == sv.Float() && nil != v.BoolValue && *v.BoolValue {
+					f = 1.0
+				}
+			case mon.TFloat:
+				f = *v.DoubleValue
+			case mon.TInt:
+				f = float64(*v.Int64Value)
+			default:
+				lager.Panic().Map("ValueType not in [HFIB]", valueType)
+			}
+			sv.SetEpoch(epoch)
+		}
 		wv = sv
 	}
-	if nil != scaler {
-		f = scaler(f)
+	if nil != v {
+		if nil != scaler {
+			f = scaler(f)
+		}
+		wv.AddFloat(f)
 	}
-	wv.AddFloat(f)
 	metricMap[rl] = wv
 }
