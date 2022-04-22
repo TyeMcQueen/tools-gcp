@@ -13,8 +13,10 @@ subsystem:
   loadbalancing.googleapis.com/l3/external/:    lb_l3
   loadbalancing.googleapis.com/l3/internal/:    ilb_l3
   loadbalancing.googleapis.com/tcp_ssl_proxy/:  tcp_ssl_proxy
+  network.googleapis.com/loadbalancer/:         net_lb
   networking.googleapis.com/vm_flow/:           net_vm_flow
   networking.googleapis.com/vpc_flow/:          net_vpc_flow
+  networksecurity.googleapis.com/https/:        net_security_https
   router.googleapis.com/nat/:                   cloud_nat
   storage.googleapis.com/storage/:              storage
 unit:
@@ -83,7 +85,7 @@ suffix:
     replace:
       predicted_max_vpc_flow_logs_count:    predicted_max_logs
   - for:
-      prefix: [ router ]
+      prefix: [ router. ]
     replace:
       nat_allocation_failed:    allocation_failed
   - for:
