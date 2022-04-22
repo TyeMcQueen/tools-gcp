@@ -16,9 +16,39 @@ var promCount = mon.NewGaugeVec(
 	"project_id", "metric", "delta", "kind",
 )
 
+var ffCount = mon.NewHistVec(
+	"gcp2prom", "metric", "fast_forward_sample_periods",
+	"Number of sample periods we had to skip when scheduling next fetch." +
+	"  Either a bug in the gcp2prom code or processing is bogged down.",
+	[]float64{1, 2, 4, 8, 16},
+	"project_id", "metric", "gcp_path",
+)
+
+var lateValueCount = mon.NewCounterVec(
+	"gcp2prom", "metric", "read_too_late_values",
+	"How many metric values found later from a period we previously fetched." +
+	"  May happen if local clock is 'fast' beyond our minimum 9s slack.",
+	"project_id", "metric", "gcp_path",
+)
+
+var latePeriodCount = mon.NewCounterVec(
+	"gcp2prom", "metric", "read_too_late_periods",
+	"How many extra metric periods found between adjacent fetches." +
+	"  May happen if processing becomes bogged down.",
+	"project_id", "metric", "gcp_path",
+)
+
 var buckets = []float64{
 	0.005, 0.01, 0.02, 0.04, 0.08, 0.15, 0.25, 0.5, 1, 2, 4, 8, 15, 30, 60,
 }
+
+var timerDelay = mon.NewHistVec(
+	"gcp2prom", "metric", "update_timer_lag_seconds",
+	"How late time.AfterFunc fired to queue a metric update request." +
+	"  If high, perhaps local CPU is exhausted.",
+	buckets,
+	"project_id",
+)
 
 var queueDelay = mon.NewHistVec(
 	"gcp2prom", "metric", "update_queued_seconds",
@@ -45,6 +75,10 @@ var updateDuration = mon.NewHistVec(
 
 func init() {
 	prometheus.MustRegister(promCount)
+	prometheus.MustRegister(ffCount)
+	prometheus.MustRegister(lateValueCount)
+	prometheus.MustRegister(latePeriodCount)
+	prometheus.MustRegister(timerDelay)
 	prometheus.MustRegister(queueDelay)
 	prometheus.MustRegister(queueEmptyDuration)
 	prometheus.MustRegister(updateDuration)
@@ -74,6 +108,72 @@ func (pv *PromVector) promCountAdd() {
 		}
 		m.Add(float64(countDiff))
 	}()
+}
+
+func (pv *PromVector) moreFFPeriods(nPeriods int64) {
+	projectID := pv.ProjectID
+	metric    := pv.PromName
+	gcpPath   := pv.MonDesc.Type
+	pv = nil        // Only use `pv` above this line!
+	go func() {     // Don't block caller on prometheus locks:
+		m, err := ffCount.GetMetricWithLabelValues(
+			projectID, metric, gcpPath,
+		)
+		if nil != err {
+			lager.Fail().Map("Can't get ffCount metric for labels", err)
+			return
+		}
+		m.Observe(float64(nPeriods))
+	}()
+}
+
+func (pv *PromVector) addLateValues(lateValues int) {
+	projectID := pv.ProjectID
+	metric    := pv.PromName
+	gcpPath   := pv.MonDesc.Type
+	pv = nil        // Only use `pv` above this line!
+	go func() {     // Don't block caller on prometheus locks:
+		m, err := lateValueCount.GetMetricWithLabelValues(
+			projectID, metric, gcpPath,
+		)
+		if nil != err {
+			lager.Fail().Map("Can't get lateValueCount metric for labels", err)
+			return
+		}
+		m.Add(float64(lateValues))
+	}()
+}
+
+func (pv *PromVector) addLatePeriods(latePeriods int) {
+	projectID := pv.ProjectID
+	metric    := pv.PromName
+	gcpPath   := pv.MonDesc.Type
+	pv = nil        // Only use `pv` above this line!
+	go func() {     // Don't block caller on prometheus locks:
+		m, err := latePeriodCount.GetMetricWithLabelValues(
+			projectID, metric, gcpPath,
+		)
+		if nil != err {
+			lager.Fail().Map("Can't get lateValueCount metric for labels", err)
+			return
+		}
+		m.Add(float64(latePeriods))
+	}()
+}
+
+func (pv *PromVector) noteTimerDelay(when time.Time) time.Time {
+	projectID := pv.ProjectID
+	now := time.Now()
+	pv = nil        // Only use `pv` above this line!
+	go func() {     // Don't block caller on prometheus locks:
+		m, err := timerDelay.GetMetricWithLabelValues(projectID)
+		if nil != err {
+			lager.Fail().Map("Can't get timerDelay metric for labels", err)
+			return
+		}
+		m.Observe(float64(now.Sub(when)) / float64(time.Second))
+	}()
+	return now
 }
 
 func (pv *PromVector) noteQueueDelay(queued, now time.Time) {
