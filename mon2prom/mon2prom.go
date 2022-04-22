@@ -16,14 +16,14 @@ import (
 	"github.com/TyeMcQueen/tools-gcp/mon2prom/label"
 	"github.com/TyeMcQueen/tools-gcp/mon2prom/value"
 	"github.com/TyeMcQueen/go-lager"
-	sd      "google.golang.org/api/monitoring/v3"   // StackDriver
+	sd      "google.golang.org/api/monitoring/v3"   // "StackDriver"
 )
-
 
 const ZuluTime = "2006-01-02T15:04:05Z"
 
 // Descriptive data for a GCP metric that we may want to report at start-up.
 // This structure can be freed after start-up is finished.
+//
 type ForHumans struct {
 	Unit            string
 	Scale           string
@@ -32,23 +32,24 @@ type ForHumans struct {
 	MonBuckets      interface{}
 }
 
-// A vector of Prometheus metrics exported from a StackDriver metric.
+// A vector of Prometheus metrics exported from a GCP metric.
 // Each metric in a vector has a different set of label values.
+//
 type PromVector struct {
-	ProjectID       string              // GCP Project Name (ID)
-	MonDesc         *sd.MetricDescriptor
-	PromName        string              // Metric name in Prometheus
-	PromDesc        *prom.Desc
-	MetricKind      mon.MetricKind      // 'D'elta, 'G'auge, or 'C'ounter
-	ValueType       mon.ValueType       // Histogram, Int, Float, or Bool
-	details         *ForHumans
-	scaler          func(float64) float64
-	BucketBounds    []float64           // Boundaries between hist buckets
-	SubBuckets      []int               // Count of SD buckets in each Prom one.
-	label.Set                           // To build hash keys from label values.
-	PrevEnd         string              // Timestamp of prior sample period end.
-	MetricMap       *map[label.RuneList]value.Metric
-	ReadOnly        atomic.Value        // Read-only map for exporting from.
+	ProjectID    string         // GCP Project Name (ID)
+	MonDesc      *sd.MetricDescriptor
+	PromName     string         // Metric name in Prometheus
+	PromDesc     *prom.Desc
+	MetricKind   mon.MetricKind // 'D'elta, 'G'auge, or 'C'ounter
+	ValueType    mon.ValueType  // Histogram, Int, Float, or Bool
+	details      *ForHumans
+	scaler       func(float64) float64
+	BucketBounds []float64      // Boundaries between hist buckets
+	SubBuckets   []int          // Count of SD buckets in each Prom one.
+	label.Set                   // To build hash keys from label values.
+	PrevEnd      string         // Timestamp of prior sample period end.
+	MetricMap    *map[label.RuneList]value.Metric
+	ReadOnly     atomic.Value   // Read-only metric map to export.
 }
 
 // What gets sent to request a metric be updated.
@@ -57,11 +58,9 @@ type UpdateRequest struct {
 	queued  time.Time
 }
 
-
 func TimeAsString(when time.Time) string {
 	return when.In(time.UTC).Format(ZuluTime)
 }
-
 
 // Returns a runner that updates PromVector values and a channel that each
 // PromVector uses to request an update.  Invoke the runner function once
@@ -72,6 +71,7 @@ func TimeAsString(when time.Time) string {
 //          mon2prom.NewVec(projectID, monClient, md, ch)
 //      }
 //      go runner()
+//
 func MetricFetcher(monClient mon.Client) (chan<- UpdateRequest, func()) {
 	ch := make(chan UpdateRequest, 5)
 	return ch, func() {
@@ -86,9 +86,9 @@ func MetricFetcher(monClient mon.Client) (chan<- UpdateRequest, func()) {
 	}
 }
 
-
 // Creates a PromVector and partially initializes it based just on a
 // MetricDescriptor.  Returns `nil`s if the metric cannot be exported.
+//
 func basicPromVec(
 	projectID   string,
 	md          *sd.MetricDescriptor,
@@ -116,9 +116,9 @@ func basicPromVec(
 	return &pv, matcher
 }
 
-
 // Finishes initializing the PromVector using recent values from the source
 // time series.  Returns `false` if the metric cannot be exported.
+//
 func (pv *PromVector) addTimeSeriesDetails(
 	matcher *config.MetricMatcher,
 	tss     []*sd.TimeSeries,
@@ -167,7 +167,6 @@ func (pv *PromVector) addTimeSeriesDetails(
 	return true
 }
 
-
 func (pv *PromVector) resampleHist(
 	matcher *config.MetricMatcher,
 	dv      *sd.Distribution,
@@ -199,10 +198,10 @@ func (pv *PromVector) resampleHist(
 			pv.MonDesc.Name, "Sample value", dv)
 		return false
 	}
-
 	if nil != pv.scaler {
 		firstBound = pv.scaler(firstBound)
 	}
+
 	pv.BucketBounds, pv.SubBuckets = combineBucketBoundaries(
 		boundCount, firstBound, nextBound,
 		mon.TInt == pv.ValueType,
@@ -220,10 +219,10 @@ func (pv *PromVector) resampleHist(
 	return true
 }
 
-
 // Initializes the Prometheus histogram buckets based on bucket boundaries
 // from a GCP metric and an optional configuration meant to reduce the number
 // of buckets.
+//
 func combineBucketBoundaries(
 	boundCount  int64,
 	firstBound  float64,
@@ -269,10 +268,10 @@ func combineBucketBoundaries(
 	return bounds[:o], subBuckets[:o+1]
 }
 
-
 // Creates a new PromVector, initializes it from recent TimeSeries data,
 // and schedules it to be updated as time goes on.  Returns `nil` if the
 // configuration does not specify how this metric should be exported.
+//
 func NewVec(
 	projectID   string,
 	monClient   mon.Client,
@@ -311,7 +310,10 @@ func NewVec(
 	return pv
 }
 
-
+// Returns information that humans might want to know about the metric being
+// exported and then frees up that information to save space.  Calling it a
+// second time just gives you zero values for all of the items.
+//
 func (pv *PromVector) ForHumans() (
 	unit        string,
 	scale       string,
@@ -330,12 +332,10 @@ func (pv *PromVector) ForHumans() (
 	return
 }
 
-
 // Just returns the prometheus *Desc for the metric.
 func (pv *PromVector) Describe(ch chan<- *prom.Desc) {
 	ch <- pv.PromDesc
 }
-
 
 // Writes out (in protobuf format) each metric in the vector.
 func (pv *PromVector) Collect(ch chan<- prom.Metric) {
@@ -349,10 +349,10 @@ func (pv *PromVector) Collect(ch chan<- prom.Metric) {
 	}
 }
 
-
 // Atomically fetches the pointer to the read-only map of read-only metrics,
 // usually so that they can be exported by Collect() while updates might
 // be simultaneously applied to the not-read-only map.
+//
 func (pv *PromVector) ReadOnlyMap() map[label.RuneList]value.Metric {
 	val := pv.ReadOnly.Load()
 	if nil == val {
@@ -361,12 +361,12 @@ func (pv *PromVector) ReadOnlyMap() map[label.RuneList]value.Metric {
 	return *val.(*map[label.RuneList]value.Metric)
 }
 
-
 // Replaces pv.MetricMap with an empty map (not disturbing the map that
 // pv.MetricMap used to point to, which is now the read-only map).  If
 // pv refers to a Delta metric kind, then the read-only metrics from the
 // read-only map get (deep) copied into the new map, so that these Counter
 // metrics don't lose their accumulated value.
+//
 func (pv *PromVector) Clear() {
 	m := make(map[label.RuneList]value.Metric)
 	pv.MetricMap = &m
@@ -382,10 +382,10 @@ func (pv *PromVector) Clear() {
 	}
 }
 
-
 // Converts all of the metrics in pv.MetricMap to be read-only metrics and
 // then atomically replaces the pointer to the old read-only map with the
 // pointer in pv.MetricMap.
+//
 func (pv *PromVector) Publish() {
 	pv.promCountAdd()
 	m := *pv.MetricMap
@@ -398,9 +398,9 @@ func (pv *PromVector) Publish() {
 	pv.ReadOnly.Store(pv.MetricMap)
 }
 
-
 // Inserts or updates a single metric value in the metric map based on the
-// latest sample period of the StackDriver metric.
+// latest sample period of the GCP metric.
+//
 func (pv *PromVector) Populate(ts *sd.TimeSeries) {
 	value.Populate(
 		*pv.MetricMap,
@@ -413,9 +413,9 @@ func (pv *PromVector) Populate(ts *sd.TimeSeries) {
 	)
 }
 
-
-// Iterates over all of the TimeSeries values for a single StackDriver
-// metric and Populates() them into the metric map.
+// Iterates over all of the TimeSeries values for a single GCP metric and
+// Populates() them into the metric map.
+//
 func (pv *PromVector) Update(monClient mon.Client, ch chan<- UpdateRequest) {
 	pv.Clear()
 	last := pv.PrevEnd
@@ -444,11 +444,11 @@ func (pv *PromVector) Update(monClient mon.Client, ch chan<- UpdateRequest) {
 	pv.Schedule(ch, last)
 }
 
-
 // Schedules when to request that the values for this metric next be updated.
 // We compute when the next sample period should be available (plus a few
 // random seconds to reduce "thundering herd") and schedule pv to be sent
 // to the metric runner's channel at that time.
+//
 func (pv *PromVector) Schedule(ch chan<- UpdateRequest, end string) {
 	now := time.Now()
 	if "" == end {

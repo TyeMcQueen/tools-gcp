@@ -11,7 +11,6 @@ import (
 	"github.com/TyeMcQueen/tools-gcp/conn"
 )
 
-
 type tFirst    bool
 type tLast     bool
 type tDelta    bool
@@ -23,31 +22,32 @@ const isDelta   = tDelta(true)
 var buckets = []float64{
 	0.005, 0.01, 0.02, 0.04, 0.08, 0.15, 0.25, 0.5, 1, 2, 4, 8, 15,
 }
+
 var mdPageSeconds = NewHistVec(
 	"gcpapi", "metric",  "desc_page_latency_seconds",
 	"Seconds it took to fetch one page of metric descriptors from GCP",
 	buckets,
 	"project_id", "first_page", "last_page", "code",
 )
+
 var tsPageSeconds = NewHistVec(
 	"gcpapi", "metric", "value_page_latency_seconds",
 	"Seconds it took to fetch one page of metric values from GCP",
 	buckets,
 	"project_id", "delta", "kind", "first_page", "last_page", "code",
 )
+
 var tsCount = NewCounterVec(
 	"gcpapi", "metric", "values_total",
 	"How many metric values (unique label sets) fetched from GCP",
 	"project_id", "delta", "kind",
 )
 
-
 func init() {
 	prometheus.MustRegister(mdPageSeconds)
 	prometheus.MustRegister(tsPageSeconds)
 	prometheus.MustRegister(tsCount)
 }
-
 
 func NewCounterVec(
 	system, subsys, name, help string, label_keys ...string,
@@ -60,7 +60,6 @@ func NewCounterVec(
 	)
 }
 
-
 func NewGaugeVec(
 	system, subsys, name, help string, label_keys ...string,
 ) *prometheus.GaugeVec {
@@ -71,7 +70,6 @@ func NewGaugeVec(
 		label_keys,
 	)
 }
-
 
 func NewHistVec(
 	system, subsys, name, help string,
@@ -87,11 +85,9 @@ func NewHistVec(
 	)
 }
 
-
 func SecondsSince(start time.Time) float64 {
 	return float64(time.Now().Sub(start)) / float64(time.Second)
 }
-
 
 func bLabel(b bool) string {
 	if b {
@@ -99,7 +95,6 @@ func bLabel(b bool) string {
 	}
 	return "false"
 }
-
 
 func mdPageSecs(
 	start       time.Time,
@@ -120,7 +115,6 @@ func mdPageSecs(
 	}
 	m.Observe(SecondsSince(start))
 }
-
 
 func tsPageSecs(
 	start       time.Time,
@@ -146,12 +140,11 @@ func tsPageSecs(
 	m.Observe(SecondsSince(start))
 }
 
-
 func tsCountAdd(
-	count       int,
-	projectID   string,
-	isDelta     tDelta,
-	kind        string,
+	count     int,
+	projectID string,
+	isDelta   tDelta,
+	kind      string,
 ) {
 	m, err := tsCount.GetMetricWithLabelValues(
 		projectID,

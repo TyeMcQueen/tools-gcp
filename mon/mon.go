@@ -37,7 +37,6 @@ const (
 
 const QuotaExceeded = 429
 
-
 func AsDuration(str string) time.Duration {
 	dur, err := time.ParseDuration(str)
 	if nil != err {
@@ -46,13 +45,11 @@ func AsDuration(str string) time.Duration {
 	return dur
 }
 
-
 // Returns `true` if either `k` or `t` is contained in the string `set`.
 func Contains(set string, k MetricKind, t ValueType) bool {
 	any := string([]byte{byte(k),byte(t)})
 	return strings.ContainsAny(set, any)
 }
-
 
 func Timeout(duration string) context.Context {
 	if "" == duration {
@@ -68,7 +65,6 @@ func Timeout(duration string) context.Context {
 	return ctx
 }
 
-
 func MustMonitoringClient(gcpClient *http.Client) Client {
 	if nil == gcpClient {
 		gcpClient = conn.MustGoogleClient()
@@ -79,7 +75,6 @@ func MustMonitoringClient(gcpClient *http.Client) Client {
 	}
 	return Client{monClient}
 }
-
 
 var braces = regexp.MustCompile(`[{][^{}]+[}]`) // Non-greedy match for {.*}.
 
@@ -109,7 +104,6 @@ func MetricAbbrs(
 	return k, t, u
 }
 
-
 func IngestDelay(md *monitoring.MetricDescriptor) time.Duration {
 	if nil == md.Metadata || "" == md.Metadata.IngestDelay {
 		return 10 * time.Second
@@ -117,14 +111,12 @@ func IngestDelay(md *monitoring.MetricDescriptor) time.Duration {
 	return AsDuration(md.Metadata.IngestDelay)
 }
 
-
 func SamplePeriod(md *monitoring.MetricDescriptor) time.Duration {
 	if nil == md.Metadata || "" == md.Metadata.SamplePeriod {
 		return 0 * time.Second
 	}
 	return AsDuration(md.Metadata.SamplePeriod)
 }
-
 
 func (m Client) StreamLatestTimeSeries(
 	ctx         context.Context,
@@ -140,7 +132,6 @@ func (m Client) StreamLatestTimeSeries(
 	}()
 	return ch
 }
-
 
 type tsLister = *monitoring.ProjectsTimeSeriesListCall
 
@@ -181,7 +172,6 @@ func (m Client) tsListLatest(
 	return lister
 }
 
-
 func MetricKindLabel(md *monitoring.MetricDescriptor) string {
 	kind := "other"
 	if "DISTRIBUTION" == md.ValueType {
@@ -193,7 +183,6 @@ func MetricKindLabel(md *monitoring.MetricDescriptor) string {
 	}
 	return kind
 }
-
 
 func (m Client) GetLatestTimeSeries(
 	ctx         context.Context,
@@ -252,7 +241,6 @@ func (m Client) GetLatestTimeSeries(
 	}
 }
 
-
 func (m Client) StreamMetricDescs(
 	ctx context.Context, projectID, prefix string,
 ) (<-chan *monitoring.MetricDescriptor) {
@@ -263,7 +251,6 @@ func (m Client) StreamMetricDescs(
 	}()
 	return ch
 }
-
 
 func (m Client) GetMetricDescs(
 	ctx         context.Context,
