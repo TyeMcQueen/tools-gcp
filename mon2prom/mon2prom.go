@@ -48,9 +48,18 @@ type PromVector struct {
 	SubBuckets   []int          // Count of SD buckets in each Prom one.
 	label.Set                   // To build hash keys from label values.
 	PrevEnd      string         // Timestamp of prior sample period end.
+	PrevWhen     time.Time      // When fetched prior period (debug).
+	NextWhen     time.Time      // When we will fetch next period.
+	UpdateStart  time.Time      // Used for debugging timing quirks.
 	MetricMap    *map[label.RuneList]value.Metric
 	ReadOnly     atomic.Value   // Read-only metric map to export.
 }
+
+/* exported metric timestamp (if lag < 1m) v-----v (if 1m <= lag)
+	   prior metric v           metric v   |     |
+	(----- period -----](----- period -----]-lag-|-rand-|
+			   prior fetch ^              current fetch ^
+*/
 
 // What gets sent to request a metric be updated.
 type UpdateRequest struct {
@@ -78,6 +87,7 @@ func MetricFetcher(monClient mon.Client) (chan<- UpdateRequest, func()) {
 		start := time.Now()
 		for ur := range ch {
 			start = ur.pv.noteQueueEmptyDuration(start)
+			ur.pv.UpdateStart = start
 			ur.pv.noteQueueDelay(ur.queued, start)
 			ur.pv.Update(monClient, ch)
 			ur.pv.noteUpdateDuration(start)
@@ -282,6 +292,7 @@ func NewVec(
 	}
 
 	tss := make([]*sd.TimeSeries, 0, 32)
+	pv.PrevWhen = time.Now()
 	for ts := range monClient.StreamLatestTimeSeries(
 		nil, projectID, md, 5, "24h",
 	) {
@@ -294,16 +305,17 @@ func NewVec(
 	pv.Clear()
 	last := ""
 	for _, ts := range tss {
-		end := ts.Points[0].Interval.EndTime
+		pt := ts.Points[0]
+		end := pt.Interval.EndTime
 		if "" == last || last < end {
 			last = end
 		}
-		pv.Populate(ts)
+		pv.Populate(ts, pt)
 	}
 	lager.Trace().Map("Exporting", pv.PromName, "From metrics", len(tss),
 		"To metrics", len(*pv.MetricMap))
 	pv.Publish()
-	pv.Schedule(ch, last)
+	pv.Schedule(ch, last, 0)
 	prom.MustRegister(pv)
 	return pv
 }
@@ -399,7 +411,7 @@ func (pv *PromVector) Publish() {
 // Inserts or updates a single metric value in the metric map based on the
 // latest sample period of the GCP metric.
 //
-func (pv *PromVector) Populate(ts *sd.TimeSeries) {
+func (pv *PromVector) Populate(ts *sd.TimeSeries, pt *sd.Point) {
 	value.Populate(
 		*pv.MetricMap,
 		pv.MetricKind,
@@ -408,6 +420,7 @@ func (pv *PromVector) Populate(ts *sd.TimeSeries) {
 		&pv.Set,
 		pv.SubBuckets,
 		ts,
+		pt,
 	)
 }
 
@@ -417,29 +430,66 @@ func (pv *PromVector) Populate(ts *sd.TimeSeries) {
 func (pv *PromVector) Update(monClient mon.Client, ch chan<- UpdateRequest) {
 	pv.Clear()
 	last := pv.PrevEnd
-	count := 0
+	prevEpoch := value.StampEpoch(last)
 	var ts *sd.TimeSeries
+	valsPerPeriod := make(map[string]int)
+	lateValues := 0
+	start := time.Now()
 	for ts = range monClient.StreamLatestTimeSeries(
-		nil, pv.ProjectID, pv.MonDesc, 1, "0",
+		nil, pv.ProjectID, pv.MonDesc, 2, "0",
 	) {
-		end := ts.Points[0].Interval.EndTime
-		if "" == last || last < end {
-			last = end
+		for _, pt := range ts.Points {
+			end := pt.Interval.EndTime
+			if "" == last || last < end {
+				last = end
+			}
+			if end < pv.PrevEnd { // Older than last sample:
+				break // Don't care about this or any older points.
+			} else if end == pv.PrevEnd {
+				// From most recent prior period:
+				rl := pv.Set.RuneList(ts.Metric.Labels, ts.Resource.Labels)
+				mv := (*pv.MetricMap)[rl]
+				if nil == mv || mv.GcpEpoch() < prevEpoch {
+					// Found a value for last sample not found last time:
+					lateValues++
+					prior := "nil"
+					if nil != mv {
+						prior = TimeAsString(time.Unix(mv.GcpEpoch(), 0))
+					}
+					lager.Trace().MMap(
+						"Found skipped metric from prior period",
+						"metric", pv.PromName,
+						"metric labels", ts.Metric.Labels,
+						"resource labels", ts.Resource.Labels,
+						"more recent found end", prior,
+						"prev period end", pv.PrevEnd,
+						"sampled at", TimeAsString(pv.PrevWhen),
+					)
+				}
+			} else {
+				valsPerPeriod[end]++
+				pv.Populate(ts, pt)
+			}
 		}
-		pv.Populate(ts)
-		count++
 	}
-	if "" == last {
+	count := 0
+	if "" == last { // Impossible
 		lager.Fail().Map(
 			"Updated metric w/ no end epic", pv.PromName,
 			"PrevEnd", pv.PrevEnd,
-			"Samples this period", count,
+			"Samples fetched", len(ts.Points),
 		)
+	} else {
+		count = valsPerPeriod[last]
+		delete(valsPerPeriod, last)
 	}
 	lager.Trace().Map("Updated", pv.PromName, "From metrics", count,
 		"To metrics", len(*pv.MetricMap))
+	pv.addLateValues(lateValues)
+	pv.addLatePeriods(len(valsPerPeriod))
 	pv.Publish()
-	pv.Schedule(ch, last)
+	pv.Schedule(ch, last, 1)
+	pv.PrevWhen = start
 }
 
 // Schedules when to request that the values for this metric next be updated.
@@ -447,15 +497,29 @@ func (pv *PromVector) Update(monClient mon.Client, ch chan<- UpdateRequest) {
 // random seconds to reduce "thundering herd") and schedule pv to be sent
 // to the metric runner's channel at that time.
 //
-func (pv *PromVector) Schedule(ch chan<- UpdateRequest, end string) {
+func (pv *PromVector) Schedule(
+	ch chan<- UpdateRequest,
+	end string,
+	seq int, // 0 if this is first try; 1 if not first try
+) {
 	now := time.Now()
+	empty := false
+	sample := mon.SamplePeriod(pv.MonDesc)
+	delay := mon.IngestDelay(pv.MonDesc)
+	if end == pv.PrevEnd {
+		empty = true
+		if when, err := time.Parse(time.RFC3339, end); nil != err {
+			end = ""
+			lager.Fail().Map("Invalid period end", end, "Error", err)
+		} else {
+			end = TimeAsString(when.Add(sample))
+		}
+	}
 	if "" == end {
+		empty = true
 		end = TimeAsString(now)
 	}
-	pv.PrevEnd = end
 	epoch  := value.StampEpoch(end)
-	sample := mon.SamplePeriod(pv.MonDesc)
-	delay  := mon.IngestDelay(pv.MonDesc)
 	random := time.Duration( ( 9.0 + 5.0*rand.Float64() )*float64(time.Second) )
 	when   := time.Unix(epoch, 0)
 	lager.Debug().Map(
@@ -466,20 +530,54 @@ func (pv *PromVector) Schedule(ch chan<- UpdateRequest, end string) {
 		"Plus random pause", float64(random)/float64(time.Second),
 	)
 	when = when.Add(sample+delay+random)
-	for when.Before(now) {
-		// TODO: Increment "skipping sample period" metric!!!
-		lager.Warn().Map(
+	if when.Before(now) {
+		if 0 == sample { // Avoid dividing by 0!
+			lager.Fail().MMap("Tried to schedule metric with 0 sample period",
+				"metric", pv.MonDesc)
+			return // Stop fetching this metric
+		}
+		// How many sample periods do we need to skip to not be in the past?
+		nPeriods := 1 + int64(now.Sub(when)/sample)
+		// Duration we need to add to 'when':
+		delta := sample * time.Duration(nPeriods)
+		next := when.Add(delta) // New value for 'when' after write log below
+		epoch += int64(delta.Seconds()) // Epoch of pv.PrevEnd+delta
+		log := lager.Trace()
+		if next.Before(now) {
+			log = lager.Panic() // Our math is broken and code needs fixing.
+		} else if 0 < seq {
+			// The first time we fetch, we can find that the most recent
+			// available data is not from the most recent sample period.
+			// So log such only at Trace and do not add to "skipped" metric.
+			log = lager.Warn()
+			pv.moreFFPeriods(nPeriods)
+		}
+		log.Map(
 			"Skipping sample period for", pv.PromName,
-			"Next sample", TimeAsString(when),
+			"gcpPath", pv.MonDesc.Type,
+			"Previous period end", pv.PrevEnd,
+			"Sampled at", TimeAsString(pv.PrevWhen),
+			"Latest period end", end,
+			"This update scheduled", TimeAsString(pv.NextWhen),
+			"This update began", TimeAsString(pv.UpdateStart),
+			"Original schedule", TimeAsString(when),
 			"Now", TimeAsString(now),
-			"SamplePeriod", display.DurationString(sample),
+			"New schedule", TimeAsString(next),
+			"Sample Period", display.DurationString(sample),
+			"Sample Delay", display.DurationString(delay),
+			"Periods skipped", nPeriods,
+			"This period empty?", empty,
 		)
-		when = when.Add(sample)
+		end = TimeAsString(time.Unix(epoch, 0))
+		when = next
 	}
+	pv.PrevEnd = end
+	pv.NextWhen = when
 	time.AfterFunc(
 		when.Sub(now),  // Convert scheduled time to delay duration.
 		func() {
-			ch <- UpdateRequest{pv: pv, queued: time.Now()}
+			then := pv.noteTimerDelay(when)
+			ch <- UpdateRequest{pv: pv, queued: then}
 		},
 	)
 }
