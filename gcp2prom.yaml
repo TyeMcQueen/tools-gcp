@@ -13,6 +13,8 @@ subsystem:
   loadbalancing.googleapis.com/l3/external/:    lb_l3
   loadbalancing.googleapis.com/l3/internal/:    ilb_l3
   loadbalancing.googleapis.com/tcp_ssl_proxy/:  tcp_ssl_proxy
+  networking.googleapis.com/vm_flow/:           net_vm_flow
+  networking.googleapis.com/vpc_flow/:          net_vpc_flow
   router.googleapis.com/nat/:                   cloud_nat
   storage.googleapis.com/storage/:              storage
 unit:
@@ -75,6 +77,10 @@ suffix:
     replace:
       /max_rate:                /max_requests_per_second
       utilization:              cpu_utilization_ratio
+  - for:
+      prefix: [ networking. ]
+    replace:
+      predicted_max_vpc_flow_logs_count:    predicted_max_logs
   - for:
       prefix: [ router ]
     replace:
