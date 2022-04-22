@@ -530,7 +530,7 @@ func (pv *PromVector) Schedule(
 		end = TimeAsString(now)
 	}
 	epoch  := value.StampEpoch(end)
-	random := time.Duration( ( 9.0 + 5.0*rand.Float64() )*float64(time.Second) )
+	random := time.Duration( ( 7.0 + 8.0*rand.Float64() )*float64(time.Second) )
 	when   := time.Unix(epoch, 0)
 	lager.Debug().Map(
 		"For", pv.PromName,
