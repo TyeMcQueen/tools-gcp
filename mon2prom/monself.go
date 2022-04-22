@@ -27,7 +27,7 @@ var ffCount = mon.NewHistVec(
 var lateValueCount = mon.NewCounterVec(
 	"gcp2prom", "metric", "read_too_late_values",
 	"How many metric values found later from a period we previously fetched." +
-	"  May happen if local clock is 'fast' beyond our minimum 9s slack.",
+	"  May happen if local clock is 'fast' beyond our minimum 7s slack.",
 	"project_id", "metric", "gcp_path",
 )
 
