@@ -256,7 +256,7 @@ func combineBucketBoundaries(
 		}
 		bound = nextBound(bound)
 	}
-	return bounds[:o], subBuckets[:o+1]
+	return bounds[:o], subBuckets[:o]
 }
 
 // Creates a new PromVector, initializes it from recent TimeSeries data,

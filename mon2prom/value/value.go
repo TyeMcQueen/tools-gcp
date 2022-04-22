@@ -219,7 +219,7 @@ func (hv *RwHistogram) Convert(
 	dv          *sd.Distribution,
 ) float64 {
 	if nil == hv.BucketHits {
-		hv.BucketHits = make([]uint64, len(subBuckets))
+		hv.BucketHits = make([]uint64, 1+len(subBuckets))
 	}
 	hv.SampleCount += uint64(dv.Count)
 	o := 0
@@ -227,7 +227,11 @@ func (hv *RwHistogram) Convert(
 	for _, n := range dv.BucketCounts {
 		if 0 == subs {
 			o++
-			subs = subBuckets[o]
+			if o < len(subBuckets) {
+				subs = subBuckets[o]
+			} else {
+				subs = 0
+			}
 		}
 		subs--
 		hv.BucketHits[o] += uint64(n)
