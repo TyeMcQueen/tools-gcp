@@ -55,6 +55,7 @@ suffix:
       instance_group/size:      group_instances
       object_count:             objects
       port_usage:               used_ports
+      utilization:              utilization_ratio
   - for:
       prefix: [ cloudsql ]
     replace:
@@ -94,12 +95,18 @@ suffix:
       unit: By
     replace:
       gress:                    gress_bytes
+      usage:                    used_bytes
+      bytes_used:               used_bytes
+      quota:                    quota_bytes
   - for:
       unit: s,ms,us,ns,s{}
     replace:
+      _time:                    _seconds
       _times:                   _seconds
       _latencies:               _latency_seconds
+      _lag:                     _lag_seconds
       rtt:                      rtt_seconds
+      uptime:                   uptime_seconds
   - for:
       only: DC
     replace:
