@@ -204,7 +204,6 @@ func (pv *PromVector) resampleHist(
 
 	pv.BucketBounds, pv.SubBuckets = combineBucketBoundaries(
 		boundCount, firstBound, nextBound,
-		mon.TInt == pv.ValueType,
 		minBuckets, minBound, minRatio, maxBound,
 	)
 	lager.Debug().Map("bounds", pv.BucketBounds,
@@ -227,7 +226,6 @@ func combineBucketBoundaries(
 	boundCount  int64,
 	firstBound  float64,
 	nextBound   func(float64) float64,
-	isInt       bool,
 	minBuckets  int,
 	minBound,
 	minRatio,
@@ -247,13 +245,6 @@ func combineBucketBoundaries(
 	o := 0
 	for _, _ = range subBuckets {
 		newBound := bound
-		if isInt {
-			trunc := int64(bound)
-			if bound <= float64(trunc) {
-				trunc--
-			}
-			newBound = float64(trunc)
-		}
 		if !resample || minNextBound <= bound &&
 		   ( minBound == maxBound || bound <= maxBound ) {
 			bounds[o] = newBound
