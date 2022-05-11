@@ -113,11 +113,10 @@ func EnvOpts() {
 	if env := os.Getenv("G2P_RUNNERS"); -1 == *Runners && "" != env {
 		if r, err := strconv.Atoi(env); nil != err {
 			lager.Exit().Map("Non-integer G2P_RUNNERS value", env, "Error", err)
+		} else if r < 0 {
+			lager.Exit().Map("Negative G2P_RUNNERS value", r)
 		} else {
 			*Runners = r
-		}
-		if *Runners < 0 {
-			lager.Exit().Map("Negative G2P_RUNNERS value", r)
 		}
 	}
 	if *Runners < 0 {
