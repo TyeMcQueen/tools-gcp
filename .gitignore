@@ -1,0 +1,4 @@
+/vendor/
+/gcp-metrics
+/gcp2prom
+/gcp2prom.log
