@@ -109,6 +109,15 @@ func basicPromVec(
 	if nil == matcher {
 		return nil, nil
 	}
+	if mon.SamplePeriod(md) < time.Minute {
+		// GCP metrics with undeclared or very short sample periods can't
+		// be exported unless we invent a reasonable sample period to use.
+		// We have not implemented that yet.
+		lager.Warn().MMap("Ignoring metric lacking long enough samplePeriod",
+			"metric", md.Type, "period", mon.SamplePeriod(md),
+			"metricDescriptor", md)
+		return nil, nil
+	}
 	pv.ProjectID = projectID
 	pv.MonDesc = md
 	pv.MetricKind = matcher.Kind
@@ -173,6 +182,7 @@ func (pv *PromVector) addTimeSeriesDetails(
 	} else if mon.THist == pv.ValueType {
 		lager.Fail().Map(
 			"Histogram metric lacks DistributionValue", tss[0].Points[0])
+		return false
 	}
 	return true
 }
