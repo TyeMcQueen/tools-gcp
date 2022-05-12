@@ -54,9 +54,13 @@ type Metric interface {
 	// this is the sum of the observations).
 	Float() float64
 
-	// Epoch() returns the Unix epoch seconds marking the end of the period
-	// covered by this value.
-	Epoch() int64
+	// GcpEpoch() returns the Unix epoch seconds of the "end" timestamp of
+	// the metric as reported by GCP.  This usually equals the end of the
+	// most recent available sample period (except for Gauge metrics that
+	// usually have metric values with startTime == endTime and sometimes
+	// multiple such values in a single sample period).
+	//
+	GcpEpoch() int64
 
 	// IsReadOnly() returns true if the value is a read-only copy.  It
 	// returns false if the value can receive updates.
@@ -79,8 +83,8 @@ type RwMetric interface {
 // converted into a value.RwSimple).
 //
 type Simple struct {
-	epoch     int64   // The epoch seconds of end of the sample period.
-	promEpoch int64   // The epoch for Prometheus (incremented for Counters).
+	gcpEpoch  int64   // The epoch seconds of end of the sample period.
+	promEpoch int64   // Epoch reported to Prometheus (may be more recent).
 	val       float64
 }
 
@@ -133,14 +137,14 @@ func (_ *RwSimple)     IsReadOnly() bool { return false }
 func (_ *RwHistogram)  IsReadOnly() bool { return false }
 
 // The following 3 methods work on all 4 Metric types:
-func (sv *Simple)      Epoch() int64 { return sv.epoch }
+func (sv *Simple)      GcpEpoch() int64 { return sv.gcpEpoch }
 func (sv *Simple)      Float() float64 { return sv.val }
 func (sv *Simple)      PromEpoch() int64 { return sv.promEpoch }
 
 func (sv *RwSimple)    AddFloat(f float64) { sv.val += f }
 func (hv *RwHistogram) AddFloat(f float64) { hv.val += f }
-func (sv *RwSimple)    SetEpoch(e int64) { sv.epoch = e; sv.promEpoch = e }
-func (hv *RwHistogram) SetEpoch(e int64) { hv.epoch = e; hv.promEpoch = e }
+func (sv *RwSimple)    SetEpoch(e int64) { sv.gcpEpoch = e; sv.promEpoch = e }
+func (hv *RwHistogram) SetEpoch(e int64) { hv.gcpEpoch = e; hv.promEpoch = e }
 
 // Each of the following 4 methods also work on the corresponding Rw* type:
 
@@ -258,7 +262,7 @@ func Populate(
 		"Resource", ts.Resource.Labels)
 	mv := metricMap[rl]
 	epoch := StampEpoch(ts.Points[0].Interval.EndTime)
-	if nil != mv && mv.IsReadOnly() && epoch == mv.Epoch() {
+	if nil != mv && mv.IsReadOnly() && epoch == mv.GcpEpoch() {
 		// If not read-only, then epoch _should_ match since metric has
 		// already received an update this cycle.
 		return  // Got no new metrics, leave old values in place.
