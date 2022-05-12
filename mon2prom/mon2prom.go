@@ -167,6 +167,30 @@ func (pv *PromVector) addTimeSeriesDetails(
 	return true
 }
 
+func parseBucketOptions(name string, bucketOptions *sd.BucketOptions) (
+	boundCount int64, firstBound float64, nextBound func(float64) float64,
+) {
+	if pb := bucketOptions.ExponentialBuckets; nil != pb {
+		boundCount = 1 + pb.NumFiniteBuckets
+		firstBound = pb.Scale
+		nextBound = func(b float64) float64 { return b * pb.GrowthFactor }
+	} else if lb := bucketOptions.LinearBuckets; nil != lb {
+		boundCount = 1 + lb.NumFiniteBuckets
+		firstBound = lb.Offset
+		nextBound = func(b float64) float64 { return b + lb.Width }
+	} else if eb := bucketOptions.ExplicitBuckets; nil != eb {
+		boundCount = int64(len(eb.Bounds))
+		firstBound = eb.Bounds[0]
+		i := 0
+		nextBound = func(_ float64) float64 { i++; return eb.Bounds[i] }
+	} else {
+		lager.Fail().Map(
+			"Buckets were not exponential, linear, nor explicit for",
+			name, "BucketOptions", bucketOptions)
+	}
+	return
+}
+
 func (pv *PromVector) resampleHist(
 	matcher *config.MetricMatcher,
 	dv      *sd.Distribution,
@@ -176,26 +200,9 @@ func (pv *PromVector) resampleHist(
 	lager.Debug().Map("minBuckets", minBuckets, "minBound", minBound,
 		"minRatio", minRatio, "maxBound", maxBound, "maxBuckets", maxBuckets)
 
-	var boundCount  int64
-	var firstBound  float64
-	var nextBound   func(float64) float64
-	if pb := dv.BucketOptions.ExponentialBuckets; nil != pb {
-		boundCount = 1 + pb.NumFiniteBuckets
-		firstBound = pb.Scale
-		nextBound = func(b float64) float64 { return b * pb.GrowthFactor }
-	} else if lb := dv.BucketOptions.LinearBuckets; nil != lb {
-		boundCount = 1 + lb.NumFiniteBuckets
-		firstBound = lb.Offset
-		nextBound = func(b float64) float64 { return b + lb.Width }
-	} else if eb := dv.BucketOptions.ExplicitBuckets; nil != eb {
-		boundCount = int64(len(eb.Bounds))
-		firstBound = eb.Bounds[0]
-		i := 0
-		nextBound = func(_ float64) float64 { i++; return eb.Bounds[i] }
-	} else {
-		lager.Fail().Map(
-			"Buckets were not exponential, linear, nor explicit for",
-			pv.MonDesc.Name, "Sample value", dv)
+	boundCount, firstBound, nextBound := parseBucketOptions(
+		pv.MonDesc.Type, dv.BucketOptions)
+	if nil == nextBound {
 		return false
 	}
 	if nil != pv.scaler {
