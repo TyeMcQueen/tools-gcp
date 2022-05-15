@@ -9,20 +9,20 @@ import (
 	"sort"
 	"unicode/utf8"
 
+	"github.com/TyeMcQueen/go-lager"
 	"github.com/golang/protobuf/proto"
 	dto "github.com/prometheus/client_model/go"
-	"github.com/TyeMcQueen/go-lager"
 	"google.golang.org/api/monitoring/v3"
 )
 
 // A label.Set tracks the possible label names and seen label values for a
 // metric.
 type Set struct {
-	labelKeys,                  // Label names for a StackDriver metric.
-	resourceKeys,               // Label names for a monitored resource.
-	keptKeys,                   // The above 2 lists minus any omitted labels.
-	SkippedKeys     []string    // Sorted list of omitted label names.
-	valueSet        Values      // The list of seen label values.
+	labelKeys, //           Label names for a StackDriver metric.
+	resourceKeys, //        Label names for a monitored resource.
+	keptKeys, //            The above 2 lists minus any omitted labels.
+	SkippedKeys []string // Sorted list of omitted label names.
+	valueSet Values //      The list of seen label values.
 }
 
 // A label.Values contains all of the seen label values (regardless of label
@@ -31,8 +31,8 @@ type Set struct {
 // string) which also provides an efficient way to find the prior metric
 // having identical label values (via a map[string] type).
 type Values struct {
-	values  []string
-	valPos  map[string]rune
+	values []string
+	valPos map[string]rune
 }
 
 // A RuneList is just a string.  It is used to store a list of values of type
@@ -102,9 +102,9 @@ func (ls *Set) LabelPairs(rl RuneList) []*dto.LabelPair {
 // Initializes a new label.Set to track the passed-in metric labels and
 // resource labels, ignoring any labels in `skipKeys`.
 func (ls *Set) Init(
-	skipKeys        []string,
-	labelDescs      []*monitoring.LabelDescriptor,
-	resourceLabels  map[string]bool,
+	skipKeys []string,
+	labelDescs []*monitoring.LabelDescriptor,
+	resourceLabels map[string]bool,
 ) {
 	skip := make(map[string]int, len(skipKeys))
 	for _, k := range skipKeys {
@@ -114,8 +114,8 @@ func (ls *Set) Init(
 	ls.valueSet = Values{
 		valPos: make(map[string]rune, 32),
 		values: make([]string, 1, 32),
-	};
-	ls.valueSet.values[0] = "n/a"   // Skip \x00 as a rune for future use.
+	}
+	ls.valueSet.values[0] = "n/a" // Skip \x00 as a rune for future use.
 
 	ls.labelKeys = make([]string, len(labelDescs))
 	skips := 0
@@ -167,13 +167,13 @@ func (ls *Set) Init(
 
 // Converts the label values from a TimeSeries into a RuneList.
 func (ls *Set) RuneList(
-	metricLabels    map[string]string,
-	resourceLabels  map[string]string,
+	metricLabels map[string]string,
+	resourceLabels map[string]string,
 ) RuneList {
 	b := make([]byte, func() int {
 		l := len(ls.labelKeys) + len(ls.resourceKeys)
 		r := ls.valueSet.Len()
-		l *= utf8.RuneLen(rune(r-1+l))
+		l *= utf8.RuneLen(rune(r - 1 + l))
 		return l
 	}())
 	o := 0
@@ -201,9 +201,9 @@ func (ls *Set) ValueList(rl RuneList) []string {
 	for _, r := range rl {
 		if len(vals) <= i {
 			lager.Panic().Map(
-				"RuneList too long",    rl,
-				"labelKeys",            len(ls.labelKeys),
-				"resourceKeys",         len(ls.resourceKeys),
+				"RuneList too long", rl,
+				"labelKeys", len(ls.labelKeys),
+				"resourceKeys", len(ls.resourceKeys),
 			)
 		}
 		vals[i] = ls.valueSet.Value(r)

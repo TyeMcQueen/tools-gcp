@@ -6,15 +6,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spf13/pflag"
 	"github.com/TyeMcQueen/go-lager"
 	"github.com/TyeMcQueen/go-tutl"
 	"github.com/TyeMcQueen/tools-gcp/conn"
 	"github.com/TyeMcQueen/tools-gcp/display"
 	"github.com/TyeMcQueen/tools-gcp/mon"
+	"github.com/spf13/pflag"
 	"google.golang.org/api/monitoring/v3"
 )
-
 
 var Usage = pflag.BoolP("?", "?", false,
 	"Show usage information.")
@@ -44,44 +43,42 @@ var Prefix = pflag.StringP("metric", "m", "",
 var Depth = pflag.IntP("depth", "d", 0,
 	"Group metrics by the first 1, 2, or up-to 3 parts of the metric path.")
 
-
 func usage() {
 	fmt.Println(display.Join("\n",
-	"gcp-metrics [-qejvhbc] [-[mudon]=...] [project-id]",
-	"  By default, shows which GCP metrics are not empty.",
-	"  Every option can be abbreviated to its first letter.",
-	"  -?           Show this usage information.",
-	"  --quiet      Don't show names of empty metrics while searching.",
-	"               Implied if -e, -j, or -v given.",
-	"  --empty      Show all metrics, not just non-empty ones.  Ignores -b.",
-	"  --json       Dump the full JSON of each metric descriptor.",
-	"  --values     Dump the JSON for the most recent metric values.",
-	"               Without -j, outputs nothing but above.  -jv outputs both.",
-	"               Either -j or -v ignores -h and -b.",
-	"  --help       Show each metric's text description.",
-	"  --buckets    Show bucket information about any histogram metrics.",
-	"  --count      With -e, shows metric counts (as w/o -e).  Slow w/o -m.",
-	"  --metric=PRE Only show metrics with these prefix(es), comma-separated.",
-	"  --unit=ms    Only show metrics with matching units, comma-separated.",
-	"  --depth=1-3  Only show groups of metrics.  -d1 just shows service/.",
-	"               -d2 shows service/object/.  -d3 can show svc/obj/sub/.",
-	"               -d causes -j, -v, -h, and -b to be ignored.",
-	"  --{only|not}=[CDGHFIBS]",
-	"      Only show (or exclude) metrics using any of the following types:",
-	"          Cumulative Delta Gauge Histogram Float Int Bool String",
-	"  Output is usually: Count KindType Path Units Delay+Period",
-	"    Count  Number of distinct label combinations (unless -e given).",
-	"    Kind   MetricKind: D, C, or G (delta, cumulative, gauge).",
-	"    Type   ValueType:  H, F, I, B, or S (hist, float, int, bool, str).",
-	"    Path   The full path of the metric type.",
-	"    Units  The units the metric is declared to be measured in.",
-	"           '' becomes '-' and values like '{Bytes}' become '{}'.",
-	"    Delay  Number of seconds before a sample becomes available.",
-	"    Period Number of seconds in each sample period.",
+		"gcp-metrics [-qejvhbc] [-[mudon]=...] [project-id]",
+		"  By default, shows which GCP metrics are not empty.",
+		"  Every option can be abbreviated to its first letter.",
+		"  -?           Show this usage information.",
+		"  --quiet      Don't show names of empty metrics while searching.",
+		"               Implied if -e, -j, or -v given.",
+		"  --empty      Show all metrics, not just non-empty ones.  Ignores -b.",
+		"  --json       Dump the full JSON of each metric descriptor.",
+		"  --values     Dump the JSON for the most recent metric values.",
+		"               Without -j, outputs nothing but above.  -jv outputs both.",
+		"               Either -j or -v ignores -h and -b.",
+		"  --help       Show each metric's text description.",
+		"  --buckets    Show bucket information about any histogram metrics.",
+		"  --count      With -e, shows metric counts (as w/o -e).  Slow w/o -m.",
+		"  --metric=PRE Only show metrics with these prefix(es), comma-separated.",
+		"  --unit=ms    Only show metrics with matching units, comma-separated.",
+		"  --depth=1-3  Only show groups of metrics.  -d1 just shows service/.",
+		"               -d2 shows service/object/.  -d3 can show svc/obj/sub/.",
+		"               -d causes -j, -v, -h, and -b to be ignored.",
+		"  --{only|not}=[CDGHFIBS]",
+		"      Only show (or exclude) metrics using any of the following types:",
+		"          Cumulative Delta Gauge Histogram Float Int Bool String",
+		"  Output is usually: Count KindType Path Units Delay+Period",
+		"    Count  Number of distinct label combinations (unless -e given).",
+		"    Kind   MetricKind: D, C, or G (delta, cumulative, gauge).",
+		"    Type   ValueType:  H, F, I, B, or S (hist, float, int, bool, str).",
+		"    Path   The full path of the metric type.",
+		"    Units  The units the metric is declared to be measured in.",
+		"           '' becomes '-' and values like '{Bytes}' become '{}'.",
+		"    Delay  Number of seconds before a sample becomes available.",
+		"    Period Number of seconds in each sample period.",
 	))
 	os.Exit(1)
 }
-
 
 func MetricPrefix(mdPath string, depth int) string {
 	parts := strings.Split(mdPath, "/")
@@ -89,23 +86,22 @@ func MetricPrefix(mdPath string, depth int) string {
 		depth = 2
 	}
 	if len(parts) <= depth {
-		depth = len(parts)-1
+		depth = len(parts) - 1
 	}
 	return strings.Join(parts[0:depth], "/") + "/"
 }
 
-
 func DescribeMetric(
-	count   int,
-	md      *monitoring.MetricDescriptor,
-	k       mon.MetricKind,
-	t       mon.ValueType,
-	u       string,
-	bType   string,
+	count int,
+	md *monitoring.MetricDescriptor,
+	k mon.MetricKind,
+	t mon.ValueType,
+	u string,
+	bType string,
 	buckets interface{},
-	eol     string,
+	eol string,
 ) {
-	if *AlsoEmpty && ! *WithCount {
+	if *AlsoEmpty && !*WithCount {
 		fmt.Printf("%c%c %s %s %s+%s%s\n", k, t, md.Type, u,
 			display.DurationString(mon.IngestDelay(md)),
 			display.DurationString(mon.SamplePeriod(md)), eol)
@@ -126,23 +122,22 @@ func DescribeMetric(
 	}
 }
 
-
 func ShowMetric(
-	client  mon.Client,
-	proj    string,
-	md      *monitoring.MetricDescriptor,
-	count   int,
-	prior   string,
-	eol     string,
+	client mon.Client,
+	proj string,
+	md *monitoring.MetricDescriptor,
+	count int,
+	prior string,
+	eol string,
 ) (int, string) {
 	prefix := MetricPrefix(md.Type, *Depth)
 	if 0 < *Depth && "" != prior && strings.HasPrefix(prefix, prior) {
 		return count, prior
 	}
 	k, t, u := mon.MetricAbbrs(md)
-	if "" != *OnlyUnits && ! ShowUnit[u] ||
-	   "" != *OnlyTypes && ! mon.Contains(*OnlyTypes, k, t) ||
-	   "" != *NotTypes && mon.Contains(*NotTypes, k, t) {
+	if "" != *OnlyUnits && !ShowUnit[u] ||
+		"" != *OnlyTypes && !mon.Contains(*OnlyTypes, k, t) ||
+		"" != *NotTypes && mon.Contains(*NotTypes, k, t) {
 		return count, prior
 	}
 
@@ -188,12 +183,11 @@ func ShowMetric(
 		}
 	} else if *AsJson {
 		display.DumpJson("  ", md)
-	} else if ! *ShowValues {
+	} else if !*ShowValues {
 		DescribeMetric(count, md, k, t, u, bucketType, buckets, eol)
 	}
 	return count, prefix
 }
-
 
 func main() {
 	if "" != os.Getenv("PANIC_ON_INT") {

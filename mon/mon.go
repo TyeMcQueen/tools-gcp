@@ -4,29 +4,30 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"regexp"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
-	"github.com/TyeMcQueen/tools-gcp/conn"
 	"github.com/TyeMcQueen/go-lager"
+	"github.com/TyeMcQueen/tools-gcp/conn"
 	"google.golang.org/api/monitoring/v3"
 )
-
 
 type Client struct {
 	*monitoring.Service
 }
 
 type MetricKind byte
+
 const (
-	KCount  MetricKind = 'C'
-	KDelta  MetricKind = 'D'
-	KGauge  MetricKind = 'G'
+	KCount MetricKind = 'C'
+	KDelta MetricKind = 'D'
+	KGauge MetricKind = 'G'
 )
 
 type ValueType byte
+
 const (
 	THist   ValueType = 'H'
 	TFloat  ValueType = 'F'
@@ -47,7 +48,7 @@ func AsDuration(str string) time.Duration {
 
 // Returns `true` if either `k` or `t` is contained in the string `set`.
 func Contains(set string, k MetricKind, t ValueType) bool {
-	any := string([]byte{byte(k),byte(t)})
+	any := string([]byte{byte(k), byte(t)})
 	return strings.ContainsAny(set, any)
 }
 
@@ -83,15 +84,17 @@ func MetricAbbrs(
 	k := MetricKind(md.MetricKind[0])
 	t := ValueType(md.ValueType[0])
 	if 'M' == k {
-		k = 'K'     // 'K' for unspecified Kind (should never happen)
+		k = 'K' // 'K' for unspecified Kind (should never happen)
 	}
 	if 'V' == t {
-		t = 'T'     // 'T' for unspecified Type (should never happen)
+		t = 'T' // 'T' for unspecified Type (should never happen)
 	}
 	if 'D' == t {
 		switch md.ValueType[1] {
-			case 'O': t = TFloat    // Double -> Float
-			case 'I': t = THist     // Distribution -> Histogram
+		case 'O':
+			t = TFloat // Double -> Float
+		case 'I':
+			t = THist // Distribution -> Histogram
 		}
 	}
 	u := md.Unit
@@ -118,12 +121,12 @@ func SamplePeriod(md *monitoring.MetricDescriptor) time.Duration {
 }
 
 func (m Client) StreamLatestTimeSeries(
-	ctx         context.Context,
-	projectID   string,
-	md          *monitoring.MetricDescriptor,
-	maxPeriods  int,
+	ctx context.Context,
+	projectID string,
+	md *monitoring.MetricDescriptor,
+	maxPeriods int,
 	maxDuration string,
-) (<-chan *monitoring.TimeSeries) {
+) <-chan *monitoring.TimeSeries {
 	ch := make(chan *monitoring.TimeSeries, 1)
 	go func() {
 		m.GetLatestTimeSeries(ctx, ch, projectID, md, maxPeriods, maxDuration)
@@ -135,10 +138,10 @@ func (m Client) StreamLatestTimeSeries(
 type tsLister = *monitoring.ProjectsTimeSeriesListCall
 
 func (m Client) tsListLatest(
-	projectID   string,
+	projectID string,
 	delay,
-	period      time.Duration,
-	maxPeriods  int,
+	period time.Duration,
+	maxPeriods int,
 	maxDuration string,
 ) tsLister {
 	if 0 == period {
@@ -148,15 +151,15 @@ func (m Client) tsListLatest(
 		maxPeriods = 1
 	}
 	maxSpan := AsDuration(maxDuration)
-	span := time.Duration(maxPeriods)*period
+	span := time.Duration(maxPeriods) * period
 	if time.Duration(0) < maxSpan && maxSpan < span {
 		maxPeriods = 1 + int(maxSpan/period)
-		span = time.Duration(maxPeriods)*period
+		span = time.Duration(maxPeriods) * period
 	}
 
-	finish  := time.Now().Add(-delay).Add(period/2)
-	start   := finish.Add(-span).Add(-period/2).Add(-delay/5)
-	sStart  := start.In(time.UTC).Format(time.RFC3339)
+	finish := time.Now().Add(-delay).Add(period / 2)
+	start := finish.Add(-span).Add(-period / 2).Add(-delay / 5)
+	sStart := start.In(time.UTC).Format(time.RFC3339)
 	sFinish := finish.In(time.UTC).Format(time.RFC3339)
 	lister :=
 		m.Projects.TimeSeries.List(
@@ -184,11 +187,11 @@ func MetricKindLabel(md *monitoring.MetricDescriptor) string {
 }
 
 func (m Client) GetLatestTimeSeries(
-	ctx         context.Context,
-	ch          chan<- *monitoring.TimeSeries,
-	projectID   string,
-	md          *monitoring.MetricDescriptor,
-	maxPeriods  int,
+	ctx context.Context,
+	ch chan<- *monitoring.TimeSeries,
+	projectID string,
+	md *monitoring.MetricDescriptor,
+	maxPeriods int,
 	maxDuration string,
 ) {
 	if nil == ctx {
@@ -207,18 +210,18 @@ func (m Client) GetLatestTimeSeries(
 	delta := tDelta("DELTA" == md.MetricKind)
 	kind := MetricKindLabel(md)
 	first, last := isFirst, !isLast
-	for ! last {
+	for !last {
 		start := time.Now()
 		page, err := lister.Do()
 		for nil != err && QuotaExceeded == conn.ErrorCode(err) {
 			lager.Warn().Map(
 				"Sleeping 20s due to quota exceeded (ListTimeSeries)", err)
-			time.Sleep(20*time.Second)
+			time.Sleep(20 * time.Second)
 			page, err = lister.Do()
 		}
 		if err != nil {
 			if 400 != conn.ErrorCode(err) ||
-			   !strings.Contains(err.Error(), "and monitored resource") {
+				!strings.Contains(err.Error(), "and monitored resource") {
 				lager.Fail().Map("Error getting page of Time Series", err,
 					"Code", conn.ErrorCode(err), "Metric", md.Type)
 			}
@@ -231,7 +234,7 @@ func (m Client) GetLatestTimeSeries(
 			go tsCountAdd(len(page.TimeSeries), projectID, delta, kind)
 			for _, timeSeries := range page.TimeSeries {
 				select {
-				case <- canceled:
+				case <-canceled:
 					return
 				case ch <- timeSeries:
 				}
@@ -242,7 +245,7 @@ func (m Client) GetLatestTimeSeries(
 
 func (m Client) StreamMetricDescs(
 	ctx context.Context, projectID, prefix string,
-) (<-chan *monitoring.MetricDescriptor) {
+) <-chan *monitoring.MetricDescriptor {
 	ch := make(chan *monitoring.MetricDescriptor, 1)
 	go func() {
 		m.GetMetricDescs(ctx, ch, projectID, prefix)
@@ -252,10 +255,10 @@ func (m Client) StreamMetricDescs(
 }
 
 func (m Client) GetMetricDescs(
-	ctx         context.Context,
-	ch          chan<- *monitoring.MetricDescriptor,
-	projectID   string,
-	prefix      string,
+	ctx context.Context,
+	ch chan<- *monitoring.MetricDescriptor,
+	projectID string,
+	prefix string,
 ) {
 	if nil == ctx {
 		defer Timeout(&ctx, "")()
@@ -275,7 +278,7 @@ func (m Client) GetMetricDescs(
 		for nil != err && QuotaExceeded == conn.ErrorCode(err) {
 			lager.Warn().Map(
 				"Sleeping 20s due to quota exceeded (ListMetricDescriptors)", err)
-			time.Sleep(20*time.Second)
+			time.Sleep(20 * time.Second)
 			page, err = lister.Do()
 		}
 		if err != nil {
@@ -289,7 +292,7 @@ func (m Client) GetMetricDescs(
 		if nil != page {
 			for _, md := range page.MetricDescriptors {
 				select {
-				case <- canceled:
+				case <-canceled:
 					return
 				case ch <- md:
 				}

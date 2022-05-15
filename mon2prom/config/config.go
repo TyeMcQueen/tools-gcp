@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/TyeMcQueen/tools-gcp/mon"
 	"github.com/TyeMcQueen/go-lager"
+	"github.com/TyeMcQueen/tools-gcp/mon"
 	sd "google.golang.org/api/monitoring/v3"
 	"gopkg.in/yaml.v2"
 )
@@ -50,16 +50,16 @@ type Selector struct {
 type MetricMatcher struct {
 	conf   Configuration
 	MD     *sd.MetricDescriptor
-	SubSys string      // Middle part of Prom metric name.
-	Name   string      // Last part of Prom metric name, so far.
+	SubSys string // Middle part of Prom metric name.
+	Name   string // Last part of Prom metric name, so far.
 	// Metric kind; one of 'C', 'D', or 'G' for cumulative, delta, or gauge.
-	Kind   mon.MetricKind
+	Kind mon.MetricKind
 	// Metric type; one of 'F', 'I', 'S', 'H', or 'B' for float, int, string,
 	// histogram (distribution), or bool.
-	Type   mon.ValueType
+	Type mon.ValueType
 	// MD.Unit but '' becomes '-' and values (or parts of values) like
 	// '{Bytes}' are replaced by just '{}'.
-	Unit   string
+	Unit string
 }
 
 // A HistogramConf is a rule for resampling histogram metrics to reduce
@@ -80,13 +80,13 @@ type HistogramConf struct {
 	// (except those already matched by a prior rule) -- which only makes
 	// sense for the last rule listed.
 	//
-	For         Selector
+	For Selector
 
 	// MinBuckets specifies the minimum number of buckets needed for
 	// resampling to happen.  If there are fewer than MinBuckets buckets,
 	// then the buckets are not resampled and are preserved as-is.
 	//
-	MinBuckets  int
+	MinBuckets int
 
 	// MinBound specifies the minimum allowed bucket boundary.  If the
 	// first bucket boundary is below this value, then the lowest
@@ -114,13 +114,13 @@ type HistogramConf struct {
 	// boundary is reached that is larger than MaxBound, then the prior
 	// kept bucket boundary becomes the last (largest) bucket boundary.
 	//
-	MaxBound    float64
+	MaxBound float64
 
 	// If the number of buckets (after resampling, if any was configured
 	// in this rule) is larger than MaxBuckets, then the metric is just
 	// ignored and will not be exported to Prometheus.
 	//
-	MaxBuckets  int
+	MaxBuckets int
 }
 
 // OmitLabelConf specifies a rule for identifying labels to be omitted
@@ -128,8 +128,8 @@ type HistogramConf struct {
 // labels that would cause high-cardinality metrics.
 //
 type OmitLabelConf struct {
-	For     Selector    // Selects which metrics to check.
-	Labels  []string    // The list of metric labels to ignore.
+	For    Selector // Selects which metrics to check.
+	Labels []string // The list of metric labels to ignore.
 }
 
 // SuffixConf is a rule for adjusting the last part of Prometheus metric
@@ -163,7 +163,7 @@ type SuffixConf struct {
 //
 type Configuration struct {
 	// System is the first part of each Prometheus metric name.
-	System      string
+	System string
 
 	// Subsystem maps GCP metric path prefixes to the 2nd part of Prom metric
 	// names.  Each key should be a prefix of some GCP metric names (paths) up
@@ -179,7 +179,7 @@ type Configuration struct {
 	//
 	// Only the longest matching prefix is applied (per metric).
 	//
-	Subsystem   map[string]string
+	Subsystem map[string]string
 
 	// Unit maps a unit name to the name of a predefined scaling factor to
 	// convert to base units that are preferred in Prometheus.  The names
@@ -192,7 +192,7 @@ type Configuration struct {
 	// If you use the same unit type in multiple entries, then which of those
 	// entries that will be applied to a metric will be "random".
 	//
-	Unit        map[string]string
+	Unit map[string]string
 
 	// Histogram is a list of rules for resampling histogram metrics to reduce
 	// the number of buckets or to simply ignore histogram metrics with too
@@ -201,7 +201,7 @@ type Configuration struct {
 	// The rules are evaluated in the order listed and only the first
 	// matching rule (for each metric) is applied.
 	//
-	Histogram   []HistogramConf
+	Histogram []HistogramConf
 
 	// OmitLabel specifies rules for identifying labels to be omitted from
 	// the metrics exported to Prometheus.  This is usually used to remove
@@ -210,14 +210,14 @@ type Configuration struct {
 	// If a metric matches more than one rule, then any labels mentioned in
 	// any of the matching rules will be omitted.
 	//
-	OmitLabel   []OmitLabelConf
+	OmitLabel []OmitLabelConf
 
 	// Suffix is a list of rules for adjusting the last part of Prometheus
 	// metric names by replacing a suffix.  Rules are applied in the order
 	// listed and each rule that applies will change the Prometheus metric
 	// name that will be used for matching subsequent rules.
 	//
-	Suffix      []*SuffixConf
+	Suffix []*SuffixConf
 }
 
 type ScalingFunc func(float64) float64
@@ -230,30 +230,30 @@ var ConfigFile = "gcp2prom.yaml"
 var configs = make(map[string]*Configuration)
 
 var Scale = map[string]ScalingFunc{
-	"*1024*1024*1024":  multiply( 1024.0*1024.0*1024.0 ),
-	"*1024*1024":       multiply( 1024.0*1024.0 ),
-	"*60*60*24":        multiply( 60.0*60.0*24.0 ),
-	"/100":             divide( 100.0 ),
-	"/1000":            divide( 1000.0 ),
-	"/1000/1000":       divide( 1000.0*1000.0 ),
-	"/1000/1000/1000":  divide( 1000.0*1000.0*1000.0 ),
+	"*1024*1024*1024": multiply(1024.0 * 1024.0 * 1024.0),
+	"*1024*1024":      multiply(1024.0 * 1024.0),
+	"*60*60*24":       multiply(60.0 * 60.0 * 24.0),
+	"/100":            divide(100.0),
+	"/1000":           divide(1000.0),
+	"/1000/1000":      divide(1000.0 * 1000.0),
+	"/1000/1000/1000": divide(1000.0 * 1000.0 * 1000.0),
 }
 
 //// Functions ////
 
 func multiply(m float64) ScalingFunc {
-	return func(f float64) float64 { return f*m }
+	return func(f float64) float64 { return f * m }
 }
 
 func divide(d float64) ScalingFunc {
-	return func(f float64) float64 { return f/d }
+	return func(f float64) float64 { return f / d }
 }
 
 type LongestFirst []string
 
-func (p LongestFirst) Len() int             { return len(p) }
-func (p LongestFirst) Less(i, j int) bool   { return len(p[i]) > len(p[j]) }
-func (p LongestFirst) Swap(i, j int)        { p[i], p[j] = p[j], p[i] }
+func (p LongestFirst) Len() int           { return len(p) }
+func (p LongestFirst) Less(i, j int) bool { return len(p[i]) > len(p[j]) }
+func (p LongestFirst) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 func longestFirst(strs []string) {
 	sort.Sort(LongestFirst(strs))
@@ -271,7 +271,7 @@ func longestKeysFirst(m map[string]string) []string {
 }
 
 func commaSeparated(list string, nilForSingle bool) []string {
-	if ! strings.Contains(list, ",") {
+	if !strings.Contains(list, ",") {
 		if nilForSingle {
 			return nil
 		} else if list = strings.TrimSpace(list); "" == list {
@@ -349,7 +349,7 @@ func MustLoadConfig(path string) Configuration {
 }
 
 // Returns the list of prefixes to GCP metrics that could be handled.
-func(c Configuration) GcpPrefixes() []string {
+func (c Configuration) GcpPrefixes() []string {
 	return uniqueKeyPrefixes(c.Subsystem)
 }
 
@@ -370,7 +370,7 @@ func uniqueKeyPrefixes(m map[string]string) []string {
 				break
 			}
 		}
-		if ! dup {
+		if !dup {
 			prefixes[o] = pref
 			o++
 		}
@@ -387,7 +387,7 @@ func uniqueKeyPrefixes(m map[string]string) []string {
 // based on the configuration chosen (because no Subsystem has been configured
 // for it).
 //
-func(c Configuration) MatchMetric(md *sd.MetricDescriptor) *MetricMatcher {
+func (c Configuration) MatchMetric(md *sd.MetricDescriptor) *MetricMatcher {
 	mm := new(MetricMatcher)
 	mm.conf = c
 	mm.MD = md
@@ -428,7 +428,7 @@ var notAllowed = regexp.MustCompile("[^a-zA-Z0-9_]+")
 //
 func (mm *MetricMatcher) computeName() {
 	for _, s := range mm.conf.Suffix {
-		if ! mm.matches(s.For) {
+		if !mm.matches(s.For) {
 			continue
 		}
 		for _, k := range s.keys {
@@ -475,7 +475,7 @@ func (mm *MetricMatcher) HistogramLimits() (
 	minBuckets int, minBound, minRatio, maxBound float64, maxBuckets int,
 ) {
 	for _, s := range mm.conf.Histogram {
-		if ! mm.matches(s.For) {
+		if !mm.matches(s.For) {
 			continue
 		}
 		return s.MinBuckets, s.MinBound, s.MinRatio, s.MaxBound, s.MaxBuckets
@@ -494,7 +494,7 @@ func (mm *MetricMatcher) matches(s Selector) bool {
 				break
 			}
 		}
-		if ! match {
+		if !match {
 			return false
 		}
 	}
@@ -507,12 +507,12 @@ func (mm *MetricMatcher) matches(s Selector) bool {
 				break
 			}
 		}
-		if ! match {
+		if !match {
 			return false
 		}
 	}
 
-	if "" != s.Only && ! mon.Contains(s.Only, mm.Kind, mm.Type) {
+	if "" != s.Only && !mon.Contains(s.Only, mm.Kind, mm.Type) {
 		return false
 	}
 
@@ -528,7 +528,7 @@ func (mm *MetricMatcher) matches(s Selector) bool {
 				break
 			}
 		}
-		if ! match {
+		if !match {
 			return false
 		}
 	}

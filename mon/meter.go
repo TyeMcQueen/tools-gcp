@@ -6,25 +6,25 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/TyeMcQueen/go-lager"
 	"github.com/TyeMcQueen/tools-gcp/conn"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
-type tFirst    bool
-type tLast     bool
-type tDelta    bool
+type tFirst bool
+type tLast bool
+type tDelta bool
 
-const isFirst   = tFirst(true)
-const isLast    = tLast(true)
-const isDelta   = tDelta(true)
+const isFirst = tFirst(true)
+const isLast = tLast(true)
+const isDelta = tDelta(true)
 
 var buckets = []float64{
 	0.005, 0.01, 0.02, 0.04, 0.08, 0.15, 0.25, 0.5, 1, 2, 4, 8, 15,
 }
 
 var mdPageSeconds = NewHistVec(
-	"gcpapi", "metric",  "desc_page_latency_seconds",
+	"gcpapi", "metric", "desc_page_latency_seconds",
 	"Seconds it took to fetch one page of metric descriptors from GCP",
 	buckets,
 	"project_id", "first_page", "last_page", "code",
@@ -97,11 +97,11 @@ func bLabel(b bool) string {
 }
 
 func mdPageSecs(
-	start       time.Time,
-	projectID   string,
+	start time.Time,
+	projectID string,
 	isFirstPage tFirst,
-	isLastPage  tLast,
-	pageErr     error,
+	isLastPage tLast,
+	pageErr error,
 ) {
 	m, err := mdPageSeconds.GetMetricWithLabelValues(
 		projectID,
@@ -117,13 +117,13 @@ func mdPageSecs(
 }
 
 func tsPageSecs(
-	start       time.Time,
-	projectID   string,
-	isDelta     tDelta,
-	kind        string,
+	start time.Time,
+	projectID string,
+	isDelta tDelta,
+	kind string,
 	isFirstPage tFirst,
-	isLastPage  tLast,
-	pageErr     error,
+	isLastPage tLast,
+	pageErr error,
 ) {
 	m, err := tsPageSeconds.GetMetricWithLabelValues(
 		projectID,
@@ -141,10 +141,10 @@ func tsPageSecs(
 }
 
 func tsCountAdd(
-	count     int,
+	count int,
 	projectID string,
-	isDelta   tDelta,
-	kind      string,
+	isDelta tDelta,
+	kind string,
 ) {
 	m, err := tsCount.GetMetricWithLabelValues(
 		projectID,
