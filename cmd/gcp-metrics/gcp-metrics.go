@@ -8,7 +8,6 @@ import (
 
 	"github.com/TyeMcQueen/go-lager"
 	"github.com/TyeMcQueen/go-tutl"
-	"github.com/TyeMcQueen/tools-gcp/conn"
 	"github.com/TyeMcQueen/tools-gcp/display"
 	"github.com/TyeMcQueen/tools-gcp/mon"
 	"github.com/spf13/pflag"
@@ -211,10 +210,15 @@ func main() {
 		eol = ""
 	}
 
-	proj := conn.DefaultProjectId()
+	proj := ""
 	if 0 < len(pflag.Args()) {
 		proj = pflag.Arg(0)
+	} else if dflt, err := lager.GcpProjectID(nil); nil != err {
+		lager.Exit().MMap("Could not determine GCP Project ID", "err", err)
+	} else {
+		proj = dflt
 	}
+
 	prefixes := strings.Split(*Prefix, ",")
 	if 0 == len(prefixes) {
 		prefixes = []string{""}
