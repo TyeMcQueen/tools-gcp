@@ -3,7 +3,7 @@ FROM golang:stretch
 WORKDIR /app/build
 COPY . .
 
-RUN go install -mod vendor ./cmd/gcp2prom.go
+RUN go install -mod vendor ./cmd/gcp2prom/gcp2prom.go
 
 
 FROM google/cloud-sdk:slim
