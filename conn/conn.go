@@ -18,38 +18,11 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-var projectID = ""
-
 const ZuluTime = "2006-01-02T15:04:05Z"
 
 func TimeAsString(when time.Time) string {
 	return when.In(time.UTC).Format(ZuluTime)
 }
-
-
-// Gets a GCP project name from FindDefaultCredentials() (from
-// golang.org/x/oauth2/google).  Though, if a project ID was previously
-// obtained such as via GcloudDefaultProject(), then that is just returned.
-func DefaultProjectId() string {
-	if "" == projectID {
-		creds, err := google.FindDefaultCredentials(
-			context.Background(),
-			"https://www.googleapis.com/auth/compute",
-			"https://www.googleapis.com/auth/monitoring.read",
-		)
-		if nil == err {
-			projectID = creds.ProjectID
-			lager.Info().Map("GCP ProjectID from default creds", projectID)
-		} else {
-			projectID = GcloudDefaultProject()
-			if "" != projectID {
-				lager.Info().Map("GCP ProjectID from gcloud", projectID)
-			}
-		}
-	}
-	return projectID
-}
-
 
 // Runs the gcloud command to get the project name that gcloud will connect
 // to by default.
