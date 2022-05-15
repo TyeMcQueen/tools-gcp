@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"time"
 
 	"github.com/TyeMcQueen/go-lager"
 	"golang.org/x/oauth2"
@@ -19,6 +20,12 @@ import (
 
 
 var projectID = ""
+
+const ZuluTime = "2006-01-02T15:04:05Z"
+
+func TimeAsString(when time.Time) string {
+	return when.In(time.UTC).Format(ZuluTime)
+}
 
 
 // Gets a GCP project name from FindDefaultCredentials() (from
