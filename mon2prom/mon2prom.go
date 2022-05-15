@@ -11,6 +11,7 @@ import (
 
 	prom    "github.com/prometheus/client_golang/prometheus"
 	"github.com/TyeMcQueen/tools-gcp/display"
+	"github.com/TyeMcQueen/tools-gcp/conn"
 	"github.com/TyeMcQueen/tools-gcp/mon"
 	"github.com/TyeMcQueen/tools-gcp/mon2prom/config"
 	"github.com/TyeMcQueen/tools-gcp/mon2prom/label"
@@ -18,8 +19,6 @@ import (
 	"github.com/TyeMcQueen/go-lager"
 	sd      "google.golang.org/api/monitoring/v3"   // "StackDriver"
 )
-
-const ZuluTime = "2006-01-02T15:04:05Z"
 
 // Descriptive data for a GCP metric that we may want to report at start-up.
 // This structure can be freed after start-up is finished.
@@ -65,10 +64,6 @@ type PromVector struct {
 type UpdateRequest struct {
 	pv      *PromVector
 	queued  time.Time
-}
-
-func TimeAsString(when time.Time) string {
-	return when.In(time.UTC).Format(ZuluTime)
 }
 
 // Returns a runner that updates PromVector values and a channel that each
@@ -464,7 +459,7 @@ func (pv *PromVector) Update(monClient mon.Client, ch chan<- UpdateRequest) {
 					lateValues++
 					prior := "nil"
 					if nil != mv {
-						prior = TimeAsString(time.Unix(mv.GcpEpoch(), 0))
+						prior = conn.TimeAsString(time.Unix(mv.GcpEpoch(), 0))
 					}
 					lager.Trace().MMap(
 						"Found skipped metric from prior period",
@@ -473,7 +468,7 @@ func (pv *PromVector) Update(monClient mon.Client, ch chan<- UpdateRequest) {
 						"resource labels", ts.Resource.Labels,
 						"more recent found end", prior,
 						"prev period end", pv.PrevEnd,
-						"sampled at", TimeAsString(pv.PrevWhen),
+						"sampled at", conn.TimeAsString(pv.PrevWhen),
 					)
 				}
 			} else {
@@ -522,12 +517,12 @@ func (pv *PromVector) Schedule(
 			end = ""
 			lager.Fail().Map("Invalid period end", end, "Error", err)
 		} else {
-			end = TimeAsString(when.Add(sample))
+			end = conn.TimeAsString(when.Add(sample))
 		}
 	}
 	if "" == end {
 		empty = true
-		end = TimeAsString(now)
+		end = conn.TimeAsString(now)
 	}
 	epoch  := value.StampEpoch(end)
 	random := time.Duration( ( 7.0 + 8.0*rand.Float64() )*float64(time.Second) )
@@ -566,19 +561,19 @@ func (pv *PromVector) Schedule(
 			"Skipping sample period for", pv.PromName,
 			"gcpPath", pv.MonDesc.Type,
 			"Previous period end", pv.PrevEnd,
-			"Sampled at", TimeAsString(pv.PrevWhen),
+			"Sampled at", conn.TimeAsString(pv.PrevWhen),
 			"Latest period end", end,
-			"This update scheduled", TimeAsString(pv.NextWhen),
-			"This update began", TimeAsString(pv.UpdateStart),
-			"Original schedule", TimeAsString(when),
-			"Now", TimeAsString(now),
-			"New schedule", TimeAsString(next),
+			"This update scheduled", conn.TimeAsString(pv.NextWhen),
+			"This update began", conn.TimeAsString(pv.UpdateStart),
+			"Original schedule", conn.TimeAsString(when),
+			"Now", conn.TimeAsString(now),
+			"New schedule", conn.TimeAsString(next),
 			"Sample Period", display.DurationString(sample),
 			"Sample Delay", display.DurationString(delay),
 			"Periods skipped", nPeriods,
 			"This period empty?", empty,
 		)
-		end = TimeAsString(time.Unix(epoch, 0))
+		end = conn.TimeAsString(time.Unix(epoch, 0))
 		when = next
 	}
 	pv.PrevEnd = end
