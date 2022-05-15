@@ -18,7 +18,6 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-
 var projectID = ""
 
 const ZuluTime = "2006-01-02T15:04:05Z"
@@ -62,9 +61,9 @@ func GcloudDefaultProject() string {
 	}
 	config := gcloudConfig{}
 	cmd := exec.Command("gcloud", "config", "list", "--format=json")
-	o := new(bytes.Buffer)      // Save Stdout to a buffer.
+	o := new(bytes.Buffer) // Save Stdout to a buffer.
 	cmd.Stdout = o
-	e := new(bytes.Buffer)      // Save Stderr to a buffer.
+	e := new(bytes.Buffer) // Save Stderr to a buffer.
 	cmd.Stderr = e
 
 	if err := cmd.Run(); nil != err {
@@ -85,7 +84,6 @@ func GcloudDefaultProject() string {
 	return config.Core.Project
 }
 
-
 // Runs the gcloud command to get the access token that it uses and makes
 // a connection that uses that for auth to GCP services.  Token will not
 // be renewed so this access will only work for a relatively short time.
@@ -95,9 +93,9 @@ func GcloudAccessClient(ctx context.Context) (*http.Client, error) {
 	}
 
 	cmd := exec.Command("gcloud", "auth", "print-access-token")
-	o := new(bytes.Buffer)      // Save Stdout to a buffer.
+	o := new(bytes.Buffer) // Save Stdout to a buffer.
 	cmd.Stdout = o
-	e := new(bytes.Buffer)      // Save Stderr to a buffer.
+	e := new(bytes.Buffer) // Save Stderr to a buffer.
 	cmd.Stderr = e
 
 	if err := cmd.Run(); nil != err {
@@ -117,15 +115,14 @@ func GcloudAccessClient(ctx context.Context) (*http.Client, error) {
 		ctx,
 		oauth2.StaticTokenSource(
 			&oauth2.Token{
-				TokenType:      "Bearer",
-				AccessToken:    string(accToken),
+				TokenType:   "Bearer",
+				AccessToken: string(accToken),
 			},
 		),
 	)
 
 	return client, nil
 }
-
 
 // Uses DefaultClient() (from golang.org/x/oauth2/google) to obtain
 // authentication for GCP services.  If that fails, then falls back to
@@ -155,7 +152,6 @@ func GoogleClient(
 	}
 	return gcpClient, nil
 }
-
 
 // Calls GoogleClient() but, if that fails, it reports the error and exits.
 func MustGoogleClient() *http.Client {

@@ -1,14 +1,14 @@
 package config
 
-import(
+import (
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"testing"
 
-	"github.com/TyeMcQueen/go-tutl"
 	"github.com/TyeMcQueen/go-lager"
+	"github.com/TyeMcQueen/go-tutl"
 	sd "google.golang.org/api/monitoring/v3"
 )
 
@@ -20,7 +20,7 @@ func TestMisc(t *testing.T) {
 
 	// Commas
 	u.IsNot(nil, commaSeparated(",", true), `"," not single`)
-	u.IsNot(nil, commaSeparated("", true),  `"" is single`)
+	u.IsNot(nil, commaSeparated("", true), `"" is single`)
 	u.IsNot(nil, commaSeparated("x", true), `"x" is single`)
 
 	u.Is("[]", commaSeparated("", false), `"" -> empty`)
@@ -40,7 +40,7 @@ func TestMisc(t *testing.T) {
 
 	// longestFirst
 	{
-		list := []string{"b","ccc","aa"}
+		list := []string{"b", "ccc", "aa"}
 		longestFirst(list)
 		u.Is("[ccc aa b]", list, "longestFirst")
 	}
@@ -48,9 +48,9 @@ func TestMisc(t *testing.T) {
 	// longestKeysFirst
 	{
 		m := map[string]string{
-			"b": "bee",
+			"b":   "bee",
 			"ccc": "cees",
-			"aa": "ays",
+			"aa":  "ays",
 		}
 		u.Is("[ccc aa b]", longestKeysFirst(m), "longestKeysFirst")
 	}

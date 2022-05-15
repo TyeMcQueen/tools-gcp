@@ -12,24 +12,25 @@ import (
 	"google.golang.org/api/monitoring/v3"
 )
 
-
 func Join(sep string, strs ...string) string { return strings.Join(strs, sep) }
 
-
 func DurationString(d time.Duration) string {
-	type u struct { suf string; dur time.Duration}
+	type u struct {
+		suf string
+		dur time.Duration
+	}
 	if d == time.Duration(0) {
 		return "0"
 	}
-	for _, unit := range ([]u{
-		u{"d", 24*time.Hour},
+	for _, unit := range []u{
+		u{"d", 24 * time.Hour},
 		u{"h", time.Hour},
 		u{"m", time.Minute},
 		u{"s", time.Second},
 		u{"ms", time.Millisecond},
 		u{"us", time.Microsecond},
-	}) {
-		if 0 == d % unit.dur {
+	} {
+		if 0 == d%unit.dur {
 			return fmt.Sprintf("%d%s", d/unit.dur, unit.suf)
 		} else if 2*unit.dur <= d {
 			return fmt.Sprintf("%.2f%s",
@@ -38,7 +39,6 @@ func DurationString(d time.Duration) string {
 	}
 	return fmt.Sprintf("%dns", d)
 }
-
 
 func DumpJson(indent string, ix interface{}) {
 	j := json.NewEncoder(os.Stdout)
@@ -50,7 +50,6 @@ func DumpJson(indent string, ix interface{}) {
 		fmt.Printf("Unable to marshal to JSON: %v\n", err)
 	}
 }
-
 
 func BucketInfo(
 	tsValue *monitoring.TypedValue,
@@ -68,7 +67,6 @@ func BucketInfo(
 	return
 }
 
-
 var wideLine = regexp.MustCompile(`(?m)^[^\n]{1,74}( )[^\n]*`)
 
 // WrapText() returns the passed-in string but with any lines longer than
@@ -82,7 +80,7 @@ func WrapText(line string) string {
 		if nil == loc {
 			break
 		}
-		if 75 <= loc[1] - loc[0] {
+		if 75 <= loc[1]-loc[0] {
 			left[loc[2]] = '\n'
 			left = left[loc[2]:]
 		} else {

@@ -13,19 +13,19 @@ import (
 	"sync"
 	"time"
 
-			"github.com/golang/protobuf/proto"
-	prom    "github.com/prometheus/client_golang/prometheus"
-	dto     "github.com/prometheus/client_model/go"
-			"github.com/TyeMcQueen/tools-gcp/mon"
-			"github.com/TyeMcQueen/tools-gcp/mon2prom/label"
-			"github.com/TyeMcQueen/go-lager"
-	sd      "google.golang.org/api/monitoring/v3"   // StackDriver
+	"github.com/TyeMcQueen/go-lager"
+	"github.com/TyeMcQueen/tools-gcp/mon"
+	"github.com/TyeMcQueen/tools-gcp/mon2prom/label"
+	"github.com/golang/protobuf/proto"
+	prom "github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
+	sd "google.golang.org/api/monitoring/v3" // StackDriver
 )
 
 // A minimal object that can be collected as a prometheus metric.
 type Writer struct {
-	PDesc   *prom.Desc
-	Metric  dto.Metric
+	PDesc  *prom.Desc
+	Metric dto.Metric
 }
 
 func (mw Writer) Desc() *prom.Desc { return mw.PDesc }
@@ -40,11 +40,11 @@ type Metric interface {
 	// Export() constructs a dto.Metric from a value.Metric, the label names
 	// in a label.Set, and the label values encoded in a label.RuneList.
 	Export(
-		metricKind  mon.MetricKind,
-		valueType   mon.ValueType,
-		ls          *label.Set,
-		rl          label.RuneList,
-		bounds      []float64,
+		metricKind mon.MetricKind,
+		valueType mon.ValueType,
+		ls *label.Set,
+		rl label.RuneList,
+		bounds []float64,
 	) dto.Metric
 
 	// Copy() returns a deep, read-only copy of a value.Metric.
@@ -83,13 +83,13 @@ type RwMetric interface {
 // converted into a value.RwSimple).
 //
 type Simple struct {
-	gcpEpoch  int64   // The epoch seconds of end of the sample period.
-	promEpoch int64   // Epoch reported to Prometheus (may be more recent).
+	gcpEpoch  int64 // The epoch seconds of end of the sample period.
+	promEpoch int64 // Epoch reported to Prometheus (may be more recent).
 	val       float64
 }
 
 // A value.RwSimple is a value.Simple that can receive updates.
-type RwSimple struct { Simple }
+type RwSimple struct{ Simple }
 
 // A value.Histogram holds the current state of a histogram metric.  It
 // implmenets the value.Metric interface.  It is read-only (but can be
@@ -102,7 +102,7 @@ type Histogram struct {
 }
 
 // A value.RwHistogram is a value.Histogram that can receive updates.
-type RwHistogram struct { Histogram }
+type RwHistogram struct{ Histogram }
 
 // A trivial cache so converting the same timestamp repeatedly is efficient:
 var epochLock sync.RWMutex
@@ -120,7 +120,10 @@ func StampEpoch(stamp string) int64 {
 		defer epochLock.RUnlock()
 		return prevEpoch
 	}
-	epochLock.RUnlock(); epochLock.Lock(); defer epochLock.Unlock()
+	epochLock.RUnlock()
+	epochLock.Lock()
+	defer epochLock.Unlock()
+
 	when, err := time.Parse(time.RFC3339, stamp)
 	if nil != err {
 		lager.Warn().Map("Invalid metric timestamp", stamp, "Error", err)
@@ -131,25 +134,25 @@ func StampEpoch(stamp string) int64 {
 	return prevEpoch
 }
 
-func (_ *Simple)       IsReadOnly() bool { return true }
-func (_ *Histogram)    IsReadOnly() bool { return true }
-func (_ *RwSimple)     IsReadOnly() bool { return false }
-func (_ *RwHistogram)  IsReadOnly() bool { return false }
+func (_ *Simple) IsReadOnly() bool      { return true }
+func (_ *Histogram) IsReadOnly() bool   { return true }
+func (_ *RwSimple) IsReadOnly() bool    { return false }
+func (_ *RwHistogram) IsReadOnly() bool { return false }
 
 // The following 3 methods work on all 4 Metric types:
-func (sv *Simple)      GcpEpoch() int64 { return sv.gcpEpoch }
-func (sv *Simple)      Float() float64 { return sv.val }
-func (sv *Simple)      PromEpoch() int64 { return sv.promEpoch }
+func (sv *Simple) GcpEpoch() int64  { return sv.gcpEpoch }
+func (sv *Simple) Float() float64   { return sv.val }
+func (sv *Simple) PromEpoch() int64 { return sv.promEpoch }
 
-func (sv *RwSimple)    AddFloat(f float64) { sv.val += f }
+func (sv *RwSimple) AddFloat(f float64)    { sv.val += f }
 func (hv *RwHistogram) AddFloat(f float64) { hv.val += f }
-func (sv *RwSimple)    SetEpoch(e int64) { sv.gcpEpoch = e; sv.promEpoch = e }
-func (hv *RwHistogram) SetEpoch(e int64) { hv.gcpEpoch = e; hv.promEpoch = e }
+func (sv *RwSimple) SetEpoch(e int64)      { sv.gcpEpoch = e; sv.promEpoch = e }
+func (hv *RwHistogram) SetEpoch(e int64)   { hv.gcpEpoch = e; hv.promEpoch = e }
 
 // Each of the following 4 methods also work on the corresponding Rw* type:
 
-func (sv *Simple)      AsReadOnly() Metric { return sv }
-func (hv *Histogram)   AsReadOnly() Metric { return hv }
+func (sv *Simple) AsReadOnly() Metric    { return sv }
+func (hv *Histogram) AsReadOnly() Metric { return hv }
 
 func (sv *Simple) Copy(samplePeriod time.Duration) Metric {
 	copy := *sv
@@ -165,14 +168,14 @@ func (hv *Histogram) Copy(samplePeriod time.Duration) Metric {
 
 // Simple's Export() returns a Protobuf version of a simple metric.
 func (sv *Simple) Export(
-	metricKind  mon.MetricKind,
-	valueType   mon.ValueType,
-	ls          *label.Set,
-	rl          label.RuneList,
-	_           []float64,
+	metricKind mon.MetricKind,
+	valueType mon.ValueType,
+	ls *label.Set,
+	rl label.RuneList,
+	_ []float64,
 ) (m dto.Metric) {
 	m.Label = ls.LabelPairs(rl)
-	m.TimestampMs = proto.Int64(1000*sv.PromEpoch())
+	m.TimestampMs = proto.Int64(1000 * sv.PromEpoch())
 
 	if mon.THist != valueType {
 		if mon.KGauge == metricKind {
@@ -189,11 +192,11 @@ func (sv *Simple) Export(
 
 // Histogram's Export() returns a Protobuf version of a histogram metric.
 func (hv *Histogram) Export(
-	metricKind  mon.MetricKind,
-	valueType   mon.ValueType,
-	ls          *label.Set,
-	rl          label.RuneList,
-	bounds      []float64,
+	metricKind mon.MetricKind,
+	valueType mon.ValueType,
+	ls *label.Set,
+	rl label.RuneList,
+	bounds []float64,
 ) dto.Metric {
 	m := hv.Simple.Export(metricKind, valueType, ls, rl, nil)
 
@@ -206,8 +209,8 @@ func (hv *Histogram) Export(
 	for i, b := range bounds {
 		cum += hv.BucketHits[i]
 		h.Bucket[i] = &dto.Bucket{
-			CumulativeCount:    proto.Uint64(cum),
-			UpperBound:         proto.Float64(b),
+			CumulativeCount: proto.Uint64(cum),
+			UpperBound:      proto.Float64(b),
 		}
 	}
 	return m
@@ -219,8 +222,8 @@ func (hv *Histogram) Export(
 // it in as well.
 //
 func (hv *RwHistogram) Convert(
-	subBuckets  []int,
-	dv          *sd.Distribution,
+	subBuckets []int,
+	dv *sd.Distribution,
 ) float64 {
 	if nil == hv.BucketHits {
 		hv.BucketHits = make([]uint64, 1+len(subBuckets))
@@ -249,14 +252,14 @@ func (hv *RwHistogram) Convert(
 // in the metricMap using the RuneList as the key.
 //
 func Populate(
-	metricMap  map[label.RuneList]Metric, // Where to store the value.Metric
+	metricMap map[label.RuneList]Metric, // Where to store the value.Metric
 	metricKind mon.MetricKind,
-	valueType  mon.ValueType,
-	scaler     func(float64) float64,     // Optional unit change function
-	ls         *label.Set,                // Tracks label values seen
-	subBuckets []int,                     // N GCP buckets per Prom bucket
-	ts         *sd.TimeSeries,
-	pt         *sd.Point,                 // Which point from above to add
+	valueType mon.ValueType,
+	scaler func(float64) float64, // Optional unit change function
+	ls *label.Set, //                Tracks label values seen
+	subBuckets []int, //             N GCP buckets per Prom bucket
+	ts *sd.TimeSeries,
+	pt *sd.Point, //                 Which point from above to add
 ) {
 	rl := ls.RuneList(ts.Metric.Labels, ts.Resource.Labels)
 	lager.Debug().Map("RuneList", rl, "Labels", ts.Metric.Labels,
@@ -266,7 +269,7 @@ func Populate(
 	if nil != mv && mv.IsReadOnly() && epoch == mv.GcpEpoch() {
 		// If not read-only, then epoch _should_ match since metric has
 		// already received an update this cycle.
-		return  // Got no new metrics, leave old values in place.
+		return // Got no new metrics, leave old values in place.
 	}
 
 	var wv RwMetric

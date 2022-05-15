@@ -9,61 +9,60 @@ import (
 	"sync/atomic"
 	"time"
 
-	prom    "github.com/prometheus/client_golang/prometheus"
-	"github.com/TyeMcQueen/tools-gcp/display"
+	"github.com/TyeMcQueen/go-lager"
 	"github.com/TyeMcQueen/tools-gcp/conn"
+	"github.com/TyeMcQueen/tools-gcp/display"
 	"github.com/TyeMcQueen/tools-gcp/mon"
 	"github.com/TyeMcQueen/tools-gcp/mon2prom/config"
 	"github.com/TyeMcQueen/tools-gcp/mon2prom/label"
 	"github.com/TyeMcQueen/tools-gcp/mon2prom/value"
-	"github.com/TyeMcQueen/go-lager"
-	sd      "google.golang.org/api/monitoring/v3"   // "StackDriver"
+	prom "github.com/prometheus/client_golang/prometheus"
+	sd "google.golang.org/api/monitoring/v3" // "StackDriver"
 )
 
 // Descriptive data for a GCP metric that we may want to report at start-up.
 // This structure can be freed after start-up is finished.
 //
 type ForHumans struct {
-	Unit            string
-	Scale           string
-	MonCount        int
-	BucketType      string
-	MonBuckets      interface{}
+	Unit       string
+	Scale      string
+	MonCount   int
+	BucketType string
+	MonBuckets interface{}
 }
 
 // A vector of Prometheus metrics exported from a GCP metric.
 // Each metric in a vector has a different set of label values.
 //
 type PromVector struct {
-	ProjectID    string         // GCP Project Name (ID)
+	ProjectID    string // GCP Project Name (ID)
 	MonDesc      *sd.MetricDescriptor
-	PromName     string         // Metric name in Prometheus
+	PromName     string // Metric name in Prometheus
 	PromDesc     *prom.Desc
 	MetricKind   mon.MetricKind // 'D'elta, 'G'auge, or 'C'ounter
 	ValueType    mon.ValueType  // Histogram, Int, Float, or Bool
 	details      *ForHumans
 	scaler       func(float64) float64
-	BucketBounds []float64      // Boundaries between hist buckets
-	SubBuckets   []int          // Count of SD buckets in each Prom one.
-	label.Set                   // To build hash keys from label values.
-	PrevEnd      string         // Timestamp of prior sample period end.
-	PrevWhen     time.Time      // When fetched prior period (debug).
-	NextWhen     time.Time      // When we will fetch next period.
-	UpdateStart  time.Time      // Used for debugging timing quirks.
+	BucketBounds []float64 // Boundaries between hist buckets
+	SubBuckets   []int     // Count of SD buckets in each Prom one.
+	label.Set              // To build hash keys from label values.
+	PrevEnd      string    // Timestamp of prior sample period end.
+	PrevWhen     time.Time // When fetched prior period (debug).
+	NextWhen     time.Time // When we will fetch next period.
+	UpdateStart  time.Time // Used for debugging timing quirks.
 	MetricMap    *map[label.RuneList]value.Metric
-	ReadOnly     atomic.Value   // Read-only metric map to export.
+	ReadOnly     atomic.Value // Read-only metric map to export.
 }
 
-/* exported metric timestamp (if lag < 1m) v-----v (if 1m <= lag)
-	   prior metric v           metric v   |     |
-	(----- period -----](----- period -----]-lag-|-rand-|
-			   prior fetch ^              current fetch ^
-*/
+// exported metric timestamp (if lag < 1m) v-----v (if 1m <= lag)
+//     prior metric v           metric v   |     |
+//  (----- period -----](----- period -----]-lag-|-rand-|
+//             prior fetch ^              current fetch ^
 
 // What gets sent to request a metric be updated.
 type UpdateRequest struct {
-	pv      *PromVector
-	queued  time.Time
+	pv     *PromVector
+	queued time.Time
 }
 
 // Returns a runner that updates PromVector values and a channel that each
@@ -95,8 +94,8 @@ func MetricFetcher(monClient mon.Client) (chan<- UpdateRequest, func()) {
 // MetricDescriptor.  Returns `nil`s if the metric cannot be exported.
 //
 func basicPromVec(
-	projectID   string,
-	md          *sd.MetricDescriptor,
+	projectID string,
+	md *sd.MetricDescriptor,
 ) (*PromVector, *config.MetricMatcher) {
 	pv := PromVector{}
 	pv.details = new(ForHumans)
@@ -120,7 +119,7 @@ func basicPromVec(
 	pv.details.Unit = matcher.Unit
 	pv.scaler, pv.details.Scale = matcher.Scaler()
 	if mon.TString == pv.ValueType {
-		return nil, nil     // Prometheus does not support string metrics.
+		return nil, nil // Prometheus does not support string metrics.
 	}
 	if mon.THist == pv.ValueType && mon.KGauge == pv.MetricKind {
 		// Treat Histogram Gauge as Delta, converting to Histogram Counter
@@ -135,14 +134,14 @@ func basicPromVec(
 //
 func (pv *PromVector) addTimeSeriesDetails(
 	matcher *config.MetricMatcher,
-	tss     []*sd.TimeSeries,
+	tss []*sd.TimeSeries,
 ) bool {
 	hasProjectID := false
 	resourceKeys := make(map[string]bool)
 	pv.details.MonCount = len(tss)
 	for _, ts := range tss {
 		if mon.THist == pv.ValueType && nil == pv.details.MonBuckets &&
-		   0 < len(ts.Points) {
+			0 < len(ts.Points) {
 			pv.details.BucketType, pv.details.MonBuckets = display.BucketInfo(
 				ts.Points[0].Value)
 		}
@@ -208,7 +207,7 @@ func parseBucketOptions(name string, bucketOptions *sd.BucketOptions) (
 
 func (pv *PromVector) resampleHist(
 	matcher *config.MetricMatcher,
-	dv      *sd.Distribution,
+	dv *sd.Distribution,
 ) bool {
 	minBuckets, minBound, minRatio, maxBound, maxBuckets :=
 		matcher.HistogramLimits()
@@ -245,18 +244,18 @@ func (pv *PromVector) resampleHist(
 // of buckets.
 //
 func combineBucketBoundaries(
-	boundCount  int64,
-	firstBound  float64,
-	nextBound   func(float64) float64,
-	minBuckets  int,
+	boundCount int64,
+	firstBound float64,
+	nextBound func(float64) float64,
+	minBuckets int,
 	minBound,
 	minRatio,
-	maxBound    float64,
+	maxBound float64,
 ) ([]float64, []int) {
 	bound := firstBound
 	minNextBound := minBound
 	if minBound == maxBound {
-		minNextBound = firstBound   // Ignore minBound
+		minNextBound = firstBound // Ignore minBound
 	}
 	bounds := make([]float64, boundCount)
 	subBuckets := make([]int, boundCount)
@@ -268,7 +267,7 @@ func combineBucketBoundaries(
 	for _, _ = range subBuckets {
 		newBound := bound
 		if !resample || minNextBound <= bound &&
-		   ( minBound == maxBound || bound <= maxBound ) {
+			(minBound == maxBound || bound <= maxBound) {
 			bounds[o] = newBound
 			subBuckets[o]++
 			o++
@@ -286,10 +285,10 @@ func combineBucketBoundaries(
 // configuration does not specify how this metric should be exported.
 //
 func NewVec(
-	projectID   string,
-	monClient   mon.Client,
-	md          *sd.MetricDescriptor,
-	ch          chan<- UpdateRequest,
+	projectID string,
+	monClient mon.Client,
+	md *sd.MetricDescriptor,
+	ch chan<- UpdateRequest,
 ) *PromVector {
 	pv, matcher := basicPromVec(projectID, md)
 	if nil == pv {
@@ -303,7 +302,7 @@ func NewVec(
 	) {
 		tss = append(tss, ts)
 	}
-	if ! pv.addTimeSeriesDetails(matcher, tss) {
+	if !pv.addTimeSeriesDetails(matcher, tss) {
 		return nil
 	}
 
@@ -330,11 +329,11 @@ func NewVec(
 // second time just gives you zero values for all of the items.
 //
 func (pv *PromVector) ForHumans() (
-	unit        string,
-	scale       string,
-	count       int,
-	bucketType  string,
-	buckets     interface{},
+	unit string,
+	scale string,
+	count int,
+	bucketType string,
+	buckets interface{},
 ) {
 	if nil != pv.details {
 		unit = pv.details.Unit
@@ -356,7 +355,7 @@ func (pv *PromVector) Describe(ch chan<- *prom.Desc) {
 func (pv *PromVector) Collect(ch chan<- prom.Metric) {
 	for runelist, m := range pv.ReadOnlyMap() {
 		ch <- value.Writer{
-			PDesc:  pv.PromDesc,
+			PDesc: pv.PromDesc,
 			Metric: m.Export(
 				pv.MetricKind, pv.ValueType, &pv.Set, runelist, pv.BucketBounds,
 			),
@@ -390,7 +389,7 @@ func (pv *PromVector) Clear() {
 	}
 	ro := pv.ReadOnlyMap()
 	for k, v := range ro {
-		if ! v.IsReadOnly() {
+		if !v.IsReadOnly() {
 			lager.Panic().Map("Non-readonly value in read-only metric map", v)
 		}
 		m[k] = v.Copy(mon.SamplePeriod(pv.MonDesc))
@@ -405,7 +404,7 @@ func (pv *PromVector) Publish() {
 	pv.promCountAdd()
 	m := *pv.MetricMap
 	for k, v := range m {
-		if ! v.IsReadOnly() {
+		if !v.IsReadOnly() {
 			v = v.AsReadOnly()
 			m[k] = v
 		}
@@ -524,9 +523,9 @@ func (pv *PromVector) Schedule(
 		empty = true
 		end = conn.TimeAsString(now)
 	}
-	epoch  := value.StampEpoch(end)
-	random := time.Duration( ( 7.0 + 8.0*rand.Float64() )*float64(time.Second) )
-	when   := time.Unix(epoch, 0)
+	epoch := value.StampEpoch(end)
+	random := time.Duration((7.0 + 8.0*rand.Float64()) * float64(time.Second))
+	when := time.Unix(epoch, 0)
 	lager.Debug().Map(
 		"For", pv.PromName,
 		"Scheduling update after", when,
@@ -534,7 +533,7 @@ func (pv *PromVector) Schedule(
 		"Plus ingestion delay", float64(delay)/float64(time.Second),
 		"Plus random pause", float64(random)/float64(time.Second),
 	)
-	when = when.Add(sample+delay+random)
+	when = when.Add(sample + delay + random)
 	if when.Before(now) {
 		if 0 == sample { // Avoid dividing by 0!
 			lager.Fail().MMap("Tried to schedule metric with 0 sample period",
@@ -545,8 +544,8 @@ func (pv *PromVector) Schedule(
 		nPeriods := 1 + int64(now.Sub(when)/sample)
 		// Duration we need to add to 'when':
 		delta := sample * time.Duration(nPeriods)
-		next := when.Add(delta) // New value for 'when' after write log below
-		epoch += int64(delta.Seconds()) // Epoch of pv.PrevEnd+delta
+		next := when.Add(delta)         // New 'when' after write log below.
+		epoch += int64(delta.Seconds()) // Epoch of pv.PrevEnd+delta.
 		log := lager.Trace()
 		if next.Before(now) {
 			log = lager.Panic() // Our math is broken and code needs fixing.
@@ -579,7 +578,7 @@ func (pv *PromVector) Schedule(
 	pv.PrevEnd = end
 	pv.NextWhen = when
 	time.AfterFunc(
-		when.Sub(now),  // Convert scheduled time to delay duration.
+		when.Sub(now), // Convert scheduled time to delay duration.
 		func() {
 			then := pv.noteTimerDelay(when)
 			ch <- UpdateRequest{pv: pv, queued: then}
