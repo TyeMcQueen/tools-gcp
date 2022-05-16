@@ -21,10 +21,12 @@ type inContext string
 
 const _contextSpan = inContext("span")
 
-// RoSpan implements Factory but only deals with Import()ed spans, thus
-// requiring no access to GCP CloudTrace libraries.
+// ROSpan implements Factory but only deals with Import()ed spans, thus
+// requiring no access to GCP CloudTrace libraries.  Such spans are
+// read-only (hence "RO"), only dealing with spans created elsewhere
+// and no changes can be made to them.
 //
-type RoSpan struct {
+type ROSpan struct {
 	proj    string
 	traceID string
 	spanID  uint64
@@ -225,38 +227,38 @@ func FinishSpan(span Factory) {
 	}
 }
 
-// NewRoSpan() returns an empty Factory.
-func NewRoSpan(projectID string) RoSpan {
-	return RoSpan{proj: projectID}
+// NewROSpan() returns an empty Factory.
+func NewROSpan(projectID string) ROSpan {
+	return ROSpan{proj: projectID}
 }
 
 // SetSpanID() lets you set the spanID to make implementing a non-read-only
-// span type easier.  This is the only method that requires a '*RoSpan' not
-// just a 'RoSpan'.
+// span type easier.  This is the only method that requires a '*ROSpan' not
+// just a 'ROSpan'.
 //
-func (s *RoSpan) SetSpanID(spanID uint64) {
+func (s *ROSpan) SetSpanID(spanID uint64) {
 	s.spanID = spanID
 }
 
 // GetProjectID() retuns the GCP Project ID.
-func (s RoSpan) GetProjectID() string {
+func (s ROSpan) GetProjectID() string {
 	return s.proj
 }
 
-func (s RoSpan) GetTraceID() string {
+func (s ROSpan) GetTraceID() string {
 	return s.traceID
 }
 
-func (s RoSpan) GetSpanID() uint64 {
+func (s ROSpan) GetSpanID() uint64 {
 	return s.spanID
 }
 
-func (s RoSpan) GetStart() time.Time {
+func (s ROSpan) GetStart() time.Time {
 	return time.Time{}
 }
 
 // GetTracePath() "projects/{projectID}/traces/{traceID}" or "".
-func (s RoSpan) GetTracePath() string {
+func (s ROSpan) GetTracePath() string {
 	if 0 == s.spanID {
 		return ""
 	}
@@ -264,7 +266,7 @@ func (s RoSpan) GetTracePath() string {
 }
 
 // GetSpanPath() returns "traces/{traceID}/spans/{spanID}" or "".
-func (s RoSpan) GetSpanPath() string {
+func (s ROSpan) GetSpanPath() string {
 	if 0 == s.spanID {
 		return ""
 	}
@@ -272,7 +274,7 @@ func (s RoSpan) GetSpanPath() string {
 }
 
 // GetCloudContext() returns "{hex:traceID}/{decimal:spanID}" or "".
-func (s RoSpan) GetCloudContext() string {
+func (s ROSpan) GetCloudContext() string {
 	if 0 == s.spanID {
 		return ""
 	}
@@ -280,7 +282,7 @@ func (s RoSpan) GetCloudContext() string {
 }
 
 // Import() returns a new factory containing a span created elsewhere.
-func (s RoSpan) Import(traceID string, spanID uint64) (Factory, error) {
+func (s ROSpan) Import(traceID string, spanID uint64) (Factory, error) {
 	if 0 == spanID {
 		return nil, fmt.Errorf("Import(): Span ID of 0 not allowed")
 	} else if 32 != len(traceID) {
@@ -294,48 +296,48 @@ func (s RoSpan) Import(traceID string, spanID uint64) (Factory, error) {
 	} else if traceID == "00000000000000000000000000000000" {
 		return nil, fmt.Errorf("Import(): Trace ID of 32 '0's not allowed")
 	}
-	return RoSpan{proj: s.proj, spanID: spanID, traceID: traceID}, nil
+	return ROSpan{proj: s.proj, spanID: spanID, traceID: traceID}, nil
 }
 
-func (s RoSpan) ImportFromHeaders(headers http.Header) Factory {
+func (s ROSpan) ImportFromHeaders(headers http.Header) Factory {
 	parts := strings.Split(headers.Get(TraceHeader), "/")
 	spanID, _ := strconv.ParseUint(parts[1], 10, 64)
 	if im, _ := s.Import(parts[0], spanID); nil != im {
 		return im
 	}
-	return RoSpan{proj: s.proj}
+	return ROSpan{proj: s.proj}
 }
 
-func (s RoSpan) SetHeader(headers http.Header) {
+func (s ROSpan) SetHeader(headers http.Header) {
 	if 0 != s.spanID {
 		headers.Set(TraceHeader, s.GetCloudContext())
 	}
 }
 
-func (s RoSpan) SetIsServer()              {}
-func (s RoSpan) SetIsClient()              {}
-func (s RoSpan) SetIsPublisher()           {}
-func (s RoSpan) SetIsSubscriber()          {}
-func (s RoSpan) SetDisplayName(_ string)   {}
-func (s RoSpan) SetStatusCode(_ int64)     {}
-func (s RoSpan) SetStatusMessage(_ string) {}
+func (s ROSpan) SetIsServer()              {}
+func (s ROSpan) SetIsClient()              {}
+func (s ROSpan) SetIsPublisher()           {}
+func (s ROSpan) SetIsSubscriber()          {}
+func (s ROSpan) SetDisplayName(_ string)   {}
+func (s ROSpan) SetStatusCode(_ int64)     {}
+func (s ROSpan) SetStatusMessage(_ string) {}
 
-func (s RoSpan) NewTrace() Factory {
+func (s ROSpan) NewTrace() Factory {
 	return nil
 }
 
-func (s RoSpan) NewSubSpan() Factory {
+func (s ROSpan) NewSubSpan() Factory {
 	return nil
 }
 
-func (s RoSpan) NewSpan() Factory {
+func (s ROSpan) NewSpan() Factory {
 	return nil
 }
 
-func (s RoSpan) AddAttribute(_ string, _ interface{}) error {
+func (s ROSpan) AddAttribute(_ string, _ interface{}) error {
 	return nil
 }
 
-func (s RoSpan) Finish() time.Duration {
+func (s ROSpan) Finish() time.Duration {
 	return time.Duration(0)
 }
