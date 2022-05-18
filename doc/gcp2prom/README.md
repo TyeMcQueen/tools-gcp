@@ -5,7 +5,7 @@ so that they can be scraped by Prometheus.  This is similar to
 https://github.com/prometheus-community/stackdriver_exporter but with the
 following improvements:
 
-* Metric names are much better.
+* Metric names are much better (see below).
 * Metric values are converted into base units as recommended for Prometheus
     (milliseconds converted to seconds, for example).
 * Each metric is collected based on the schedule GCP has set for it.

@@ -203,7 +203,7 @@ func (r *Registrar) NewFactory() spans.Factory {
 // Halt() should only be called after you are sure that no more spans will
 // be Finish()ed.  Any spans Finish()ed after Halt() has been called may
 // cause a panic().  Not waiting for Halt() to return can mean that recently
-// Finish()ed span might not be registered.
+// Finish()ed spans might not be registered.
 //
 func (r *Registrar) Halt() {
 	if nil == r.queue {
@@ -259,6 +259,11 @@ func (s *Span) initDetails() *Span {
 	return s
 }
 
+// logIfEmpty() returns 'true' and logs an error with a stack trace if the
+// invoking factory is empty.  If 'orImported' is 'true', then this is also
+// done if the factory contains an Import()ed span.  Otherwise it logs
+// nothing and returns 'false'.
+//
 func (s Span) logIfEmpty(orImported bool) bool {
 	if 0 != s.GetSpanID() {
 		lager.Fail().WithStack(1, -1, 3).List(
@@ -345,7 +350,7 @@ func (s *Span) NewSubSpan() spans.Factory {
 }
 
 // NewSpan() returns a new factory holding a new span; either NewTrace() or
-// NewSubSpan().
+// NewSubSpan(), depending on whether the invoking factory is empty.
 //
 func (s *Span) NewSpan() spans.Factory {
 	if 0 == s.GetSpanID() {
@@ -355,7 +360,7 @@ func (s *Span) NewSpan() spans.Factory {
 }
 
 // Sets the span kind to "SERVER".  Does nothing except log a failure
-// with a stack trace if the factory is empty.
+// with a stack trace if the factory is empty or Import()ed.
 //
 func (s *Span) SetIsServer() {
 	if !s.logIfEmpty(true) {
@@ -455,7 +460,7 @@ func (s *Span) SetStatusCode(code int64) {
 
 // SetStatusMessage() sets the status message string on the contained
 // span.  Does nothing except log a failure with a stack trace if the
-// factory is empty.
+// factory is empty or Import()ed.
 //
 func (s *Span) SetStatusMessage(msg string) {
 	if s.logIfEmpty(true) {
