@@ -306,7 +306,7 @@ func (s Span) ImportFromHeaders(headers http.Header) spans.Factory {
 // NewTrace() returns a new factory holding a new span, part of a new
 // trace.  Any span held in the invoking factory is ignored.
 //
-func (s *Span) NewTrace() spans.Factory {
+func (s Span) NewTrace() spans.Factory {
 	ROSpan, err := s.ROSpan.Import(
 		NewTraceID(s.GetTraceID()), NewSpanID(s.GetSpanID()))
 	if nil != err {
@@ -322,7 +322,7 @@ func (s *Span) NewTrace() spans.Factory {
 // invoking factory was empty, then a failure with a stack trace is
 // logged and a 'nil' factory is returned.
 //
-func (s *Span) NewSubSpan() spans.Factory {
+func (s Span) NewSubSpan() spans.Factory {
 	if s.logIfEmpty(false) {
 		return nil
 	}
@@ -351,7 +351,7 @@ func (s *Span) NewSubSpan() spans.Factory {
 // NewSpan() returns a new factory holding a new span; either NewTrace() or
 // NewSubSpan(), depending on whether the invoking factory is empty.
 //
-func (s *Span) NewSpan() spans.Factory {
+func (s Span) NewSpan() spans.Factory {
 	if 0 == s.GetSpanID() {
 		return s.NewTrace()
 	}
