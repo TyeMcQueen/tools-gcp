@@ -255,7 +255,6 @@ func (s *Span) initDetails() *Span {
 	if 0 != s.momSpan {
 		s.details.ParentSpanId = spans.HexSpanID(s.momSpan)
 	}
-	s.spanInc = 1 | NewSpanID(0) // Must be odd, thus mutually prime to 2**64
 	return s
 }
 
@@ -295,15 +294,12 @@ func (s Span) Import(traceID string, spanID uint64) (spans.Factory, error) {
 		return nil, err
 	}
 	sp := &Span{ROSpan: ROSpan.(spans.ROSpan), ch: s.ch}
-	return sp.initDetails(), nil
+	return sp, nil
 }
 
 func (s Span) ImportFromHeaders(headers http.Header) spans.Factory {
 	ROSpan := s.ROSpan.ImportFromHeaders(headers)
 	sp := &Span{ROSpan: ROSpan.(spans.ROSpan), ch: s.ch}
-	if 0 != ROSpan.GetSpanID() {
-		sp.initDetails()
-	}
 	return sp
 }
 
@@ -332,12 +328,15 @@ func (s *Span) NewSubSpan() spans.Factory {
 	}
 	if 0 == s.kidSpan { // Creating first sub-span
 		s.kidSpan = s.GetSpanID() // Want kidSpan to be spanID+spanInc below
+		s.spanInc = 1 | NewSpanID(0) // Must be odd; mutually prime to 2**64
 	}
 	s.kidSpan += s.spanInc
 	if 0 == s.kidSpan { // Eventually we can rotate to 0...
 		s.kidSpan += s.spanInc // ...so rotate one more time.
 	}
-	s.details.ChildSpanCount++
+	if nil != s.details {
+		s.details.ChildSpanCount++
+	}
 
 	ROSpan := s.ROSpan
 	ROSpan.SetSpanID(s.kidSpan)
