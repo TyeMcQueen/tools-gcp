@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -e
+
+REPO=tyemcq
+NAME=gcp2prom
+VERS=v0.3.0
+
+export VERBOSE=1
+
+run-cmd docker build -f deploy/gcp2prom/Dockerfile . -t $NAME:$VERS
+run-cmd docker tag $NAME:$VERS $REPO/$NAME:$VERS
+run-cmd docker push $REPO/$NAME:$VERS
