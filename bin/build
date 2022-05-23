@@ -1,13 +1,46 @@
 #!/usr/bin/env bash
 
-set -e
+set -e  # Exit on command failure
 
-REPO=tyemcq
-NAME=gcp2prom
+die() {
+    echo "$*" >&2
+    exit 1
+}
+
+usage() {
+    exec >&2
+    if [[  0 != $#  ]]; then
+        echo "$*"
+    fi
+    echo "Usage: bin/build local \$IMAGE  # Build local container."
+    echo "   or: bin/build push  \$IMAGE  # Push local container to Docker Hub."
+    echo "       # Push local container to gcr.io for some GCP project:"
+    echo "   or: bin/build push  \$IMAGE \$PROJECT"
+    exit
+}
+
+export VERBOSE=1    # Show commands that get run.
+
 VERS=v0.3.0
 
-export VERBOSE=1
+[[ 0 == $# ]]  &&  usage
+[[ $1 == local || $1 == push ]]  ||  usage "Unknown operation: $1"
+[[ 1 == $# ]]  &&  die "No image name given"
+NAME=$2
+FILE=deploy/$NAME/Dockerfile
+[[ -f $FILE ]]  ||  die "Unknown image name; no $FILE found."
 
-run-cmd docker build -f deploy/gcp2prom/Dockerfile . -t $NAME:$VERS
+if [[  $1 == local  ]]; then
+    [[ 2 == $# ]]  ||  die "Too many arguments"
+    run-cmd docker build -f $FILE . -t $NAME:$VERS
+    exit
+elif [[  2 == $#  ]]; then
+    REPO=tyemcq
+elif [[  3 == $#  ]]; then
+    REPO=gcr.io/$3
+else
+    die "Too many arguments"
+fi
+
 run-cmd docker tag $NAME:$VERS $REPO/$NAME:$VERS
 run-cmd docker push $REPO/$NAME:$VERS
