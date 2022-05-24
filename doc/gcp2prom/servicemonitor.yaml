@@ -1,0 +1,18 @@
+kind: ServiceMonitor
+apiVersion: monitoring.coreos.com/v1
+metadata:
+  name: gcp2prom
+  namespace: default
+  labels:
+    app: gcp2prom
+spec:
+  endpoints:
+    - path: /metrics
+      port: prom
+      scheme: http
+  namespaceSelector:
+    matchNames:
+      - default
+  selector:
+    matchLabels:
+      app: gcp2prom
