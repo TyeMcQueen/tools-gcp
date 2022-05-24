@@ -1,7 +1,11 @@
 # gcp2prom
 
 The gcp2prom daemon exports GCP metrics (formerly "StackDriver Monitoring")
-so that they can be scraped by Prometheus.  This is similar to
+so that they can be scraped by Prometheus.
+
+## Compared to StackDriver Exporter
+
+This is similar to
 https://github.com/prometheus-community/stackdriver_exporter but with the
 following improvements:
 
@@ -65,7 +69,7 @@ sample this metric, because GCP tells us what the schedule is and gcp2prom
 just follows that schedule).
 
 You can use rate() and increase() and similar Prometheus functions on this
-metric and get 100% accurate answers.  Now, current implementations of
+metric and get 100% accurate answers.  Now, even recent implementations of
 Prometheus mostly ignore the accurate timestamps that gcp2prom exposes for
 these metrics so the Counter metric appears to not change every other time it
 is sampled so if you use too short of an interval in your call to rate(), then
@@ -92,3 +96,11 @@ uses 18.  gcp2prom also drops the client_country and proxy_continent labels
 because the former makes for very high cardinality metrics and the latter,
 when combined with the buckets, can lead to high cardinality.  For
 non-histogram metrics, only the client_country label is dropped.
+
+# See Also
+
+See [Deploying](DEPLOY.md) for details on deploying gcp2prom to your GKE
+cluster.
+
+See [History](HISTORY.md) for a list of releases including dates, feature
+changes, and bugs fixed.

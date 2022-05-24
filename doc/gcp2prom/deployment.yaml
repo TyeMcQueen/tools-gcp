@@ -1,0 +1,43 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: gcp2prom
+  namespace: default
+  labels:
+    app: gcp2prom
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gcp2prom
+  template:
+    metadata:
+      labels:
+        app: gcp2prom
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: '/metrics'
+        prometheus.io/port: '8080'
+    spec:
+      containers:
+        - name: gcp2prom
+          image: tyemcq/gcp2prom:v0.3.1
+          securityContext:
+            runAsUser: 101
+            runAsGroup: 101
+          ports:
+            - name: promscrape
+              protocol: TCP
+              containerPort: 8080
+          env:
+            - name: LAGER_GCP
+              value: 1
+            - name: LAGER_LEVELS
+              value: FWNAI
+          resources:
+            requests:
+              cpu: 100m
+              memory: 88Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
