@@ -19,8 +19,8 @@ import (
 	"time"
 
 	"github.com/TyeMcQueen/go-lager"
+	"github.com/TyeMcQueen/go-lager/gcp-spans"
 	"github.com/TyeMcQueen/tools-gcp/conn"
-	"github.com/TyeMcQueen/tools-gcp/trace/spans"
 	ct2 "google.golang.org/api/cloudtrace/v2"
 //  api "google.golang.org/api/googleapi"
 )
