@@ -1,4 +1,13 @@
 Release are available as Docker containers tagged tyemcq/gcp2prom.
+https://hub.docker.com/r/tyemcq/gcp2prom
+
+v0.3.2 - 2022-06-01
+
+* Even leaner image (0 security findings).
+* Add startup probe; can take minutes to find all of the metrics.
+* Report when metrics get scraped for the first time.
+* Warn if metrics don't get scraped after being ready for 5 minutes.
+* Use newer go-lager to prevent failure getting GCP Project ID.
 
 v0.3.1 - 2022-05-26
 
