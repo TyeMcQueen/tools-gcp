@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/TyeMcQueen/go-lager"
 	"github.com/TyeMcQueen/go-tutl"
@@ -282,11 +283,17 @@ func main() {
 		go runner()
 	}
 
+	_ = time.AfterFunc(5*time.Minute, func() {
+		if !mon2prom.WasScraped {
+			lager.Warn().MMap(
+				"Prometheus still hasn't scraped our metrics after 5 minutes")
+		}
+	})
 	http.Handle("/metrics", promhttp.Handler())
 	http.Handle("/ready", http.HandlerFunc(
 		func(rw http.ResponseWriter, _ *http.Request) {
 			rw.WriteHeader(200)
 		},
 	))
-	lager.Fail().Map("Can't listen", http.ListenAndServe(":8080", nil))
+	lager.Fail().MMap("Can't listen", "err", http.ListenAndServe(":8080", nil))
 }
