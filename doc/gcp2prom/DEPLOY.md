@@ -29,12 +29,12 @@ https://cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster#us
 But you can configure workload identity to have gcp2prom use a different
 service account for one of the following reasons:
 
-    * You don't want the node service account to have permission to read
-        GCP metrics despite GCP's recommendation.
-    * You don't want gcp2prom to have some other access that is granted
-        to your node service account.
-    * You want to use gcp2prom to read metrics from a GCP project other
-        than the one the GKE cluster is in.
+* You don't want the node service account to have permission to read
+    GCP metrics despite GCP's recommendation.
+* You don't want gcp2prom to have some other access that is granted
+    to your node service account.
+* You want to use gcp2prom to read metrics from a GCP project other
+    than the one the GKE cluster is in.
 
 ## Scraping Metrics From Other GCP Projects
 
