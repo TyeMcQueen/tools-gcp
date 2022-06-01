@@ -30,6 +30,12 @@ spec:
               value: "1"
             - name: LAGER_LEVELS
               value: FWNAI
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: promscrape
+            failureThreshold: 60
+            periodSeconds: 10
           resources:
             requests:
               cpu: 100m

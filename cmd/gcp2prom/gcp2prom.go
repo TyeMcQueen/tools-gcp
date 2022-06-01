@@ -283,5 +283,10 @@ func main() {
 	}
 
 	http.Handle("/metrics", promhttp.Handler())
+	http.Handle("/ready", http.HandlerFunc(
+		func(rw http.ResponseWriter, _ *http.Request) {
+			rw.WriteHeader(200)
+		},
+	))
 	lager.Fail().Map("Can't listen", http.ListenAndServe(":8080", nil))
 }
