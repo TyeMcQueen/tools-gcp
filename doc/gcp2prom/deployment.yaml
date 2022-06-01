@@ -27,7 +27,7 @@ spec:
               containerPort: 8080
           env:
             - name: LAGER_GCP
-              value: 1
+              value: "1"
             - name: LAGER_LEVELS
               value: FWNAI
           resources:
