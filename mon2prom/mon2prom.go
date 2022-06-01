@@ -6,6 +6,7 @@ package mon2prom
 
 import (
 	"math/rand"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -19,6 +20,9 @@ import (
 	prom "github.com/prometheus/client_golang/prometheus"
 	sd "google.golang.org/api/monitoring/v3" // "StackDriver"
 )
+
+var WasScraped = false
+var _firstCollection sync.Once
 
 // Descriptive data for a GCP metric that we may want to report at start-up.
 // This structure can be freed after start-up is finished.
@@ -353,6 +357,10 @@ func (pv *PromVector) Describe(ch chan<- *prom.Desc) {
 
 // Writes out (in protobuf format) each metric in the vector.
 func (pv *PromVector) Collect(ch chan<- prom.Metric) {
+	_firstCollection.Do(func() {
+		WasScraped = true
+		lager.Note().MMap("Prometheus scraped our metrics for the first time")
+	})
 	for runelist, m := range pv.ReadOnlyMap() {
 		ch <- value.Writer{
 			PDesc: pv.PromDesc,
