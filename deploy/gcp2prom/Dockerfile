@@ -1,4 +1,4 @@
-FROM golang:stretch
+FROM golang:alpine
 
 WORKDIR /app/build
 COPY . .
@@ -6,8 +6,7 @@ COPY . .
 RUN go install -mod vendor ./cmd/gcp2prom/gcp2prom.go
 
 
-FROM google/cloud-sdk:slim
-# FROM google/cloud-sdk:latest
+FROM google/cloud-sdk:alpine
 
 WORKDIR /app/bin
 
