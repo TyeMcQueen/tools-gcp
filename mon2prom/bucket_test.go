@@ -11,13 +11,14 @@ import (
 func TestCombineBoundaries(t *testing.T) {
 	u := tutl.New(t)
 
+	scaler := func(f float64) float64 { return f / 1000.0 }
+
 	bounds := &sd.BucketOptions{ExponentialBuckets: &sd.Exponential{
 		NumFiniteBuckets: 66,
 		Scale:            1.0,
 		GrowthFactor:     1.4,
 	}}
-	boundCount, firstBound, nextBound := parseBucketOptions("", bounds)
-	firstBound /= 1000.0
+	boundCount, firstBound, nextBound := parseBucketOptions("", bounds, scaler)
 	bucketBounds, subBuckets := combineBucketBoundaries(
 		boundCount, firstBound, nextBound,
 		24, 0.01, 1.9, 600.0,

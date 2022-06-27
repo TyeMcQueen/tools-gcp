@@ -185,7 +185,9 @@ func (pv *PromVector) addTimeSeriesDetails(
 	return true
 }
 
-func parseBucketOptions(name string, bucketOptions *sd.BucketOptions) (
+func parseBucketOptions(
+	name string, bucketOptions *sd.BucketOptions, scaler func(float64) float64,
+) (
 	boundCount int64, firstBound float64, nextBound func(float64) float64,
 ) {
 	if pb := bucketOptions.ExponentialBuckets; nil != pb {
@@ -199,12 +201,20 @@ func parseBucketOptions(name string, bucketOptions *sd.BucketOptions) (
 	} else if eb := bucketOptions.ExplicitBuckets; nil != eb {
 		boundCount = int64(len(eb.Bounds))
 		firstBound = eb.Bounds[0]
+		if nil != scaler {
+			for i, b := range eb.Bounds {
+				eb.Bounds[i] = scaler(b)
+			}
+		}
 		i := 0
 		nextBound = func(_ float64) float64 { i++; return eb.Bounds[i] }
 	} else {
 		lager.Fail().Map(
 			"Buckets were not exponential, linear, nor explicit for",
 			name, "BucketOptions", bucketOptions)
+	}
+	if nil != scaler {
+		firstBound = scaler(firstBound)
 	}
 	return
 }
@@ -219,12 +229,9 @@ func (pv *PromVector) resampleHist(
 		"minRatio", minRatio, "maxBound", maxBound, "maxBuckets", maxBuckets)
 
 	boundCount, firstBound, nextBound := parseBucketOptions(
-		pv.MonDesc.Type, dv.BucketOptions)
+		pv.MonDesc.Type, dv.BucketOptions, pv.scaler)
 	if nil == nextBound {
 		return false
-	}
-	if nil != pv.scaler {
-		firstBound = pv.scaler(firstBound)
 	}
 
 	pv.BucketBounds, pv.SubBuckets = combineBucketBoundaries(
@@ -269,10 +276,9 @@ func combineBucketBoundaries(
 	}
 	o := 0
 	for _, _ = range subBuckets {
-		newBound := bound
 		if !resample || minNextBound <= bound &&
 			(minBound == maxBound || bound <= maxBound) {
-			bounds[o] = newBound
+			bounds[o] = bound
 			subBuckets[o]++
 			o++
 			minNextBound = bound * minRatio
