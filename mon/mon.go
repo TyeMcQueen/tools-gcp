@@ -137,6 +137,9 @@ func (m Client) StreamLatestTimeSeries(
 
 type tsLister = *monitoring.ProjectsTimeSeriesListCall
 
+var _forceBegin = os.Getenv("TS_FORCE_BEGIN")
+var _forceEnd = os.Getenv("TS_FORCE_END")
+
 func (m Client) tsListLatest(
 	projectID string,
 	delay,
@@ -161,6 +164,10 @@ func (m Client) tsListLatest(
 	start := finish.Add(-span).Add(-period / 2).Add(-delay / 5)
 	sStart := start.In(time.UTC).Format(time.RFC3339)
 	sFinish := finish.In(time.UTC).Format(time.RFC3339)
+	if "" != _forceBegin && "" != _forceEnd {
+		sStart = _forceBegin
+		sFinish = _forceEnd
+	}
 	lister :=
 		m.Projects.TimeSeries.List(
 			"projects/" + projectID,
