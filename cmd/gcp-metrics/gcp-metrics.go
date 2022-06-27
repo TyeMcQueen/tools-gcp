@@ -182,6 +182,9 @@ func ShowMetric(
 		}
 	} else if *AsJson {
 		display.DumpJson("  ", md)
+		if *WithBuckets && nil != buckets {
+			display.DumpJson("", buckets)
+		}
 	} else if !*ShowValues {
 		DescribeMetric(count, md, k, t, u, bucketType, buckets, eol)
 	}
