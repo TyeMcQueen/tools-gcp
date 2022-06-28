@@ -47,6 +47,7 @@ type PromVector struct {
 	ValueType    mon.ValueType  // Histogram, Int, Float, or Bool
 	details      *ForHumans
 	scaler       func(float64) float64
+	BucketOpts   *sd.BucketOptions
 	BucketBounds []float64 // Boundaries between hist buckets
 	SubBuckets   []int     // Count of SD buckets in each Prom one.
 	label.Set              // To build hash keys from label values.
@@ -144,10 +145,12 @@ func (pv *PromVector) addTimeSeriesDetails(
 	resourceKeys := make(map[string]bool)
 	pv.details.MonCount = len(tss)
 	for _, ts := range tss {
-		if mon.THist == pv.ValueType && nil == pv.details.MonBuckets &&
+		if mon.THist == pv.ValueType && nil == pv.BucketOpts &&
 			0 < len(ts.Points) {
-			pv.details.BucketType, pv.details.MonBuckets = display.BucketInfo(
-				ts.Points[0].Value)
+			val := ts.Points[0].Value
+			pv.BucketOpts = val.DistributionValue.BucketOptions
+			pv.details.BucketType, pv.details.MonBuckets =
+				display.BucketInfo(val)
 		}
 		for k, _ := range ts.Resource.Labels {
 			resourceKeys[k] = true
@@ -183,6 +186,44 @@ func (pv *PromVector) addTimeSeriesDetails(
 		return false
 	}
 	return true
+}
+
+func bucketOptionsEqual(old, new *sd.BucketOptions) bool {
+	if nil == old && nil == new {
+		return true
+	} else if nil == old || nil == new {
+		return false
+	} else if opb := old.ExponentialBuckets; nil != opb {
+		if npb := new.ExponentialBuckets; nil == npb {
+			return false
+		} else {
+			return opb.NumFiniteBuckets == npb.NumFiniteBuckets &&
+				opb.Scale == npb.Scale &&
+				opb.GrowthFactor == npb.GrowthFactor
+		}
+	} else if olb := old.LinearBuckets; nil != olb {
+		if nlb := new.LinearBuckets; nil == nlb {
+			return false
+		} else {
+			return olb.NumFiniteBuckets == nlb.NumFiniteBuckets &&
+				olb.Offset == nlb.Offset &&
+				olb.Width == nlb.Width
+		}
+	} else if oeb := old.ExplicitBuckets; nil != oeb {
+		if neb := new.ExplicitBuckets; nil == neb {
+			return false
+		} else {
+			for i, b := range oeb.Bounds {
+				if b != neb.Bounds[i] {
+					return false
+				}
+			}
+			return true
+		}
+	}
+	lager.Panic().MMap("Impossibility in bucketOptionsEqual()",
+		"old", old, "new", new)
+	return false // Not reached
 }
 
 func parseBucketOptions(
@@ -431,7 +472,14 @@ func (pv *PromVector) Publish() {
 // Inserts or updates a single metric value in the metric map based on the
 // latest sample period of the GCP metric.
 //
-func (pv *PromVector) Populate(ts *sd.TimeSeries, pt *sd.Point) {
+func (pv *PromVector) Populate(ts *sd.TimeSeries, pt *sd.Point) bool {
+	if dv := pt.Value.DistributionValue; nil != dv {
+		if !bucketOptionsEqual(pv.BucketOpts, dv.BucketOptions) {
+			return false
+		}
+	} else if nil != pv.BucketOpts {
+		return false
+	}
 	value.Populate(
 		*pv.MetricMap,
 		pv.MetricKind,
@@ -442,6 +490,7 @@ func (pv *PromVector) Populate(ts *sd.TimeSeries, pt *sd.Point) {
 		ts,
 		pt,
 	)
+	return true
 }
 
 // Iterates over all of the TimeSeries values for a single GCP metric and
