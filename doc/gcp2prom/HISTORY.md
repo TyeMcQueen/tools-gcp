@@ -1,6 +1,11 @@
 Release are available as Docker containers tagged tyemcq/gcp2prom.
 https://hub.docker.com/r/tyemcq/gcp2prom
 
+v0.3.3 - 2022-06-27
+
+* Ignore metric values using different buckets than found on start-up.
+* Fix several bugs with ExplicitBuckets for GCP Distribution metrics.
+
 v0.3.2 - 2022-06-01
 
 * Even leaner image (0 security findings).
