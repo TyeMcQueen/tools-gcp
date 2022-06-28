@@ -28,7 +28,7 @@ spec:
     spec:
       containers:
         - name: gcp2prom
-          image: tyemcq/gcp2prom:v0.3.2
+          image: tyemcq/gcp2prom:v0.3.3
           securityContext:
             runAsUser: 101
             runAsGroup: 101

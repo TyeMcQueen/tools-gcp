@@ -1,4 +1,4 @@
 bin/build VERS=v
 doc/gcp2prom/deployment.yaml image: tyemcq/gcp2prom:v
 doc/gcp2prom/gcp2prom.yaml image: tyemcq/gcp2prom:v
--prior 0.3.1
+-prior 0.3.2

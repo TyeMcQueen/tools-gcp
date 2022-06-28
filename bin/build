@@ -21,7 +21,7 @@ usage() {
 
 export VERBOSE=1    # Show commands that get run.
 
-VERS=v0.3.2
+VERS=v0.3.3
 
 [[ 0 == $# ]]  &&  usage
 [[ $1 == local || $1 == push ]]  ||  usage "Unknown operation: $1"
