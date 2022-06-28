@@ -275,7 +275,10 @@ func combineBucketBoundaries(
 		minRatio = 1.0
 	}
 	o := 0
-	for _, _ = range subBuckets {
+	for i, _ := range subBuckets {
+		if 0 < i {
+			bound = nextBound(bound)
+		}
 		if !resample || minNextBound <= bound &&
 			(minBound == maxBound || bound <= maxBound) {
 			bounds[o] = bound
@@ -285,7 +288,6 @@ func combineBucketBoundaries(
 		} else {
 			subBuckets[o]++
 		}
-		bound = nextBound(bound)
 	}
 	return bounds[:o], subBuckets[:o]
 }
