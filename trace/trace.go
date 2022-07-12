@@ -228,7 +228,7 @@ func startRegistrar(
 			project = dflt
 		}
 	}
-	prefix := "project/" + project + "/"
+	prefix := "projects/" + project + "/"
 	for ; 0 < runners; runners-- {
 		go func() {
 			for sp := range queue {
@@ -264,7 +264,7 @@ func (s *Span) initDetails() *Span {
 // nothing and returns 'false'.
 //
 func (s Span) logIfEmpty(orImported bool) bool {
-	if 0 != s.GetSpanID() {
+	if 0 == s.GetSpanID() {
 		lager.Fail().WithStack(1, -1, 3).List(
 			"Disallowed method called on empty spans.Factory")
 		return true
