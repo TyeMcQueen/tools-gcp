@@ -20,10 +20,15 @@ import (
 
 	"github.com/TyeMcQueen/go-lager"
 	"github.com/TyeMcQueen/go-lager/gcp-spans"
-	"github.com/TyeMcQueen/tools-gcp/conn"
 	ct2 "google.golang.org/api/cloudtrace/v2"
 //  api "google.golang.org/api/googleapi"
 )
+
+const ZuluTime = "2006-01-02T15:04:05.999999Z"
+
+func TimeAsString(when time.Time) string {
+	return when.In(time.UTC).Format(ZuluTime)
+}
 
 // See NewClient().
 type Client struct {
@@ -250,7 +255,7 @@ func startRegistrar(
 func (s *Span) initDetails() *Span {
 	s.details = &ct2.Span{SpanId: spans.HexSpanID(s.GetSpanID())}
 	if !s.start.IsZero() {
-		s.details.StartTime = conn.TimeAsString(s.start)
+		s.details.StartTime = TimeAsString(s.start)
 	}
 	if 0 != s.momSpan {
 		s.details.ParentSpanId = spans.HexSpanID(s.momSpan)
@@ -484,7 +489,7 @@ func (s *Span) Finish() time.Duration {
 		return time.Duration(0)
 	}
 	s.end = time.Now()
-	s.details.EndTime = conn.TimeAsString(s.end)
+	s.details.EndTime = TimeAsString(s.end)
 	s.ch <- *s
 	return s.end.Sub(s.start)
 }
