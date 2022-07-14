@@ -1,4 +1,7 @@
 /vendor/
+/results/
+/cover
+/cover.html
 /gcp-metrics
 /gcp2prom
 /gcp2prom.log
