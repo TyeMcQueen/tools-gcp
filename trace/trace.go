@@ -174,12 +174,12 @@ func StartServer(pCtx *context.Context, runners int) func() {
 //
 func NewRegistrar(
 	project string, client Client, runners int,
-) (Registrar, error) {
+) (*Registrar, error) {
 	queue, done, err := startRegistrar(project, client, runners)
 	if nil != err {
-		return Registrar{}, err
+		return nil, err
 	}
-	return Registrar{project, runners, queue, done}, nil
+	return &Registrar{project, runners, queue, done}, nil
 }
 
 // MustNewRegistrar() calls NewRegistrar() and, if that fails, uses
@@ -187,7 +187,7 @@ func NewRegistrar(
 //
 func MustNewRegistrar(
 	project string, client Client, runners int,
-) Registrar {
+) *Registrar {
 	reg, err := NewRegistrar(project, client, runners)
 	if nil != err {
 		lager.Exit().MMap("Could not start Registrar for CloudTrace spans",
