@@ -175,6 +175,13 @@ func StartServer(pCtx *context.Context, runners int) func() {
 func NewRegistrar(
 	project string, client Client, runners int,
 ) (*Registrar, error) {
+	if "" == project {
+		if dflt, err := lager.GcpProjectID(nil); nil != err {
+			return nil, err
+		} else {
+			project = dflt
+		}
+	}
 	queue, done, err := startRegistrar(project, client, runners)
 	if nil != err {
 		return nil, err
@@ -227,13 +234,6 @@ func startRegistrar(
 ) (chan<- Span, <-chan bool, error) {
 	queue := make(chan Span, runners)
 	done := make(chan bool, runners)
-	if "" == project {
-		if dflt, err := lager.GcpProjectID(nil); nil != err {
-			return nil, nil, err
-		} else {
-			project = dflt
-		}
-	}
 	prefix := "projects/" + project + "/"
 	for ; 0 < runners; runners-- {
 		go func() {
