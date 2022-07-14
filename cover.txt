@@ -1,0 +1,4 @@
+75.5%  mon2prom/config/config.go
+13.5%  mon2prom/mon2prom.go
+ 8.5%  mon2prom/monself.go
+91.7%  trace/trace.go
