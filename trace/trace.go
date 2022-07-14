@@ -14,6 +14,7 @@ import (
 	"fmt"
 	mrand "math/rand"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -487,6 +488,9 @@ func (s *Span) SetStatusMessage(msg string) {
 func (s *Span) Finish() time.Duration {
 	if s.logIfEmpty(true) {
 		return time.Duration(0)
+	}
+	if nil == s.details.DisplayName {
+		s.SetDisplayName(os.Args[0])
 	}
 	s.end = time.Now()
 	s.details.EndTime = TimeAsString(s.end)
