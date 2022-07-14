@@ -64,3 +64,27 @@ rebuild:
 ## Push local containers to Docker Hub
 push:
 	bin/build push gcp2prom
+
+MOD := github.com/TyeMcQueen/tools-gcp/
+
+cover: go.mod */*.go results/project.txt
+	GCP_PROJECT_ID=`cat results/project.txt` go test -coverprofile cover ./...
+
+cover.html: cover
+	go tool cover -html cover -o cover.html
+
+cover.txt: cover.html
+	@grep '<option value=' cover.html | sed \
+		-e 's:^.*<option value="[^"][^"]*">${MOD}::' -e 's:</option>.*::' \
+		-e 's:^\([^ ][^ ]*\) [(]\(.*\)[)]:\2 \1:' | col-align - > cover.txt
+	@echo ''
+
+.PHONY: test
+## Run unit tests and report statement coverage percentages
+test: cover.txt
+	@cat cover.txt
+
+.PHONY: coverage
+## View coverage details in your browser
+coverage: cover.html
+	open cover.html
