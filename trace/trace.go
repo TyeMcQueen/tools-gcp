@@ -203,6 +203,25 @@ func MustNewRegistrar(
 	return reg
 }
 
+// WaitForIdleRunners() is only meant to be used by tests.  It allows you to
+// ensure that all prior Finish()ed Spans have been processed so the test can
+// check for any errors that were logged.
+//
+// It works by sending one request per runner that will cause that runner to
+// wait when it receives it.  Then it reads the responses from all of the
+// runners (which ends their waiting) and then returns.
+//
+func (r *Registrar) WaitForIdleRunners() {
+	dones := make(chan Span, 0)
+	empty := Span{ch: dones}
+	for i := r.runners; 0 < i; i-- {
+		r.queue <- empty
+	}
+	for i := r.runners; 0 < i; i-- {
+		<- dones
+	}
+}
+
 // NewFactory() returns a spans.Factory that can be used to create and
 // manipulate spans and eventually register them with GCP Cloud Trace.
 //
@@ -238,6 +257,14 @@ func startRegistrar(
 	for ; 0 < runners; runners-- {
 		go func() {
 			for sp := range queue {
+				// Sending an empty Span is used by tests to
+				// wait for the previous CreateSpan() call to finish:
+				if 0 == sp.GetSpanID() {
+					if sp.ch != queue {
+						sp.ch <- sp
+					}
+					continue
+				}
 				// TODO!  Add a reasonable timeout!!
 				_, err := client.ss.CreateSpan(
 					prefix+sp.GetSpanPath(), sp.details,
