@@ -374,6 +374,7 @@ func (s Span) NewSubSpan() spans.Factory {
 	ro := s.ROSpan
 	ro.SetSpanID(s.kidSpan)
 	kid := &Span{ROSpan: ro, ch: s.ch, start: time.Now()}
+	kid.momSpan = s.GetSpanID()
 	kid.initDetails()
 	if !s.start.IsZero() {
 		kid.details.SameProcessAsParentSpan = true
