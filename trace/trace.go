@@ -156,7 +156,7 @@ func MustNewClient(ctx context.Context, svc *ct2.Service) Client {
 // enable GCP-based tracing, usually called like:
 //
 //      ctx := context.Background()
-//      defer trace.StartServer(&ctx)()
+//      defer trace.StartServer(&ctx, 1)()
 //      // Have 'ctx' returned by the http.Server.BaseContext func.
 //
 // This assumes that the calling function will not exit until the server
@@ -371,9 +371,9 @@ func (s Span) NewSubSpan() spans.Factory {
 		s.details.ChildSpanCount++
 	}
 
-	ROSpan := s.ROSpan
-	ROSpan.SetSpanID(s.kidSpan)
-	kid := &Span{ROSpan: ROSpan, ch: s.ch, start: time.Now()}
+	ro := s.ROSpan
+	ro.SetSpanID(s.kidSpan)
+	kid := &Span{ROSpan: ro, ch: s.ch, start: time.Now()}
 	kid.initDetails()
 	if !s.start.IsZero() {
 		kid.details.SameProcessAsParentSpan = true
