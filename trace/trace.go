@@ -162,9 +162,20 @@ func MustNewClient(ctx context.Context, svc *ct2.Service) Client {
 // This assumes that the calling function will not exit until the server
 // is shutting down.
 //
-func StartServer(pCtx *context.Context, runners int) func() {
+// You can also add an extra argument that is a pointer to a variable of
+// type '*Registrar' to have that variable set to the span Registrar (mostly
+// useful when testing).
+//
+func StartServer(
+	pCtx *context.Context, runners int, pRegs... **Registrar,
+) func() {
 	spanReg := MustNewRegistrar("", MustNewClient(*pCtx, nil), runners)
 	*pCtx = spans.ContextStoreSpan(*pCtx, spanReg.NewFactory())
+	for _, p := range pRegs {
+		if nil != p {
+			*p = spanReg
+		}
+	}
 	return func() { spanReg.Halt() }
 }
 
