@@ -52,19 +52,6 @@ func Contains(set string, k MetricKind, t ValueType) bool {
 	return strings.ContainsAny(set, any)
 }
 
-func Timeout(pCtx *context.Context, duration string) context.CancelFunc {
-	if "" == duration {
-		duration = os.Getenv("MAX_QUERY_DURATION")
-	}
-	if "" == duration {
-		duration = "10m"
-	}
-	ctx, can := context.WithTimeout(
-		context.Background(), AsDuration(duration))
-	*pCtx = ctx
-	return can
-}
-
 func MustMonitoringClient(gcpClient *http.Client) Client {
 	if nil == gcpClient {
 		gcpClient = conn.MustGoogleClient()
@@ -202,7 +189,8 @@ func (m Client) GetLatestTimeSeries(
 	maxDuration string,
 ) {
 	if nil == ctx {
-		defer Timeout(&ctx, "")()
+		defer conn.Timeout(
+			&ctx, conn.EnvDuration("MAX_QUERY_DURATION", "30s"))()
 	}
 	canceled := ctx.Done()
 	if nil == md.Metadata {
@@ -268,7 +256,8 @@ func (m Client) GetMetricDescs(
 	prefix string,
 ) {
 	if nil == ctx {
-		defer Timeout(&ctx, "")()
+		defer conn.Timeout(
+			&ctx, conn.EnvDuration("MAX_QUERY_DURATION", "30s"))()
 	}
 	canceled := ctx.Done()
 	lister := m.Projects.MetricDescriptors.List("projects/" + projectID)

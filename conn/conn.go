@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"time"
 
@@ -22,6 +23,38 @@ const ZuluTime = "2006-01-02T15:04:05Z"
 
 func TimeAsString(when time.Time) string {
 	return when.In(time.UTC).Format(ZuluTime)
+}
+
+func EnvDuration(envVar, defaultDur string) time.Duration {
+	if durStr := os.Getenv(envVar); "" != durStr {
+		dur, err := time.ParseDuration(durStr)
+		if nil == err {
+			return dur
+		}
+		lager.Warn().MMap("Invalid duration from environment",
+			"envVar", envVar, "value", durStr, "Error", err)
+		os.Setenv(envVar, defaultDur)
+	}
+	dur, err := time.ParseDuration(defaultDur)
+	if nil == err {
+		return dur
+	}
+	lager.Exit().WithStack(1, 2).MMap("Invalid default duration in code",
+		"envVar", envVar, "value", defaultDur, "Error", err)
+	return time.Duration(0) // Not reached.
+}
+
+func Timeout(pCtx *context.Context, dur time.Duration) context.CancelFunc {
+	if nil == pCtx {
+		lager.Exit().WithCaller(1).MMap(
+			"Nil pointer to Context passed to Timeout()")
+	}
+	if nil == *pCtx {
+		*pCtx = context.Background()
+	}
+	ctx, can := context.WithTimeout(*pCtx, dur)
+	*pCtx = ctx
+	return can
 }
 
 // Runs the gcloud command to get the project name that gcloud will connect
