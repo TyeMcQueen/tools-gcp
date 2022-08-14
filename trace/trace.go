@@ -342,6 +342,17 @@ func (s Span) GetStart() time.Time {
 	return s.start
 }
 
+// GetDuration() returns a negative duration if the Factory is empty or
+// if the span has not been Finish()ed yet.  Otherwise, it returns the
+// span's duration.
+//
+func (s Span) GetDuration() time.Duration {
+	if s.end.IsZero() {
+		return -time.Second
+	}
+	return s.end.Sub(s.start)
+}
+
 // Import() returns a new Factory containing a span created somewhere
 // else.  If the traceID or spanID is invalid, then a 'nil' Factory and
 // an error are returned.  The usual reason to do this is so that you can
