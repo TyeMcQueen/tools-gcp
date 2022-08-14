@@ -335,6 +335,145 @@ func startRegistrar(
 	return queue, dones, nil
 }
 
+// ContextPushSpan() takes a Context which should already be decorated with a
+// span Factory [see spans.ContextStoreSpan()].  If so, it calls NewSpan() on
+// that span, calls 'SetDisplayName(name)' on the new child span, and returns
+// both a Context (decorated with the new span) and the new span.
+//
+// If not, it logs the lack of a span in the Context (including a stack
+// trace) and returns an empty Factory that is mostly useless other than
+// not being 'nil' (and the original Context).
+//
+// Example usage:
+//
+//      ctx2, span := trace.ContextPushSpan(ctx, "span.name")
+//      defer span.Finish()
+//
+// If you do not need to retain access to the prior 'ctx', then you may want
+// to use PushSpan() instead.
+//
+func ContextPushSpan(
+	ctx context.Context, name string,
+) (context.Context, spans.Factory) {
+	if nil == ctx {
+		lager.Warn().WithStack(1, 0).MMap(
+			"trace.ContextPushSpan() passed nil Context")
+		return ctx, spans.ROSpan{}
+	}
+	span := spans.ContextGetSpan(ctx)
+	if nil == span {
+		lager.Warn(ctx).WithStack(1, 0).MMap(
+			"trace.ContextPushSpan() passed undecorated Context")
+		return ctx, spans.ROSpan{}
+	}
+	kid := span.NewSpan().SetDisplayName(name)
+	return spans.ContextStoreSpan(ctx, kid), kid
+}
+
+// RequestPushSpan() takes an *http.Request and a Context which should
+// already be decorated with a span Factory [see spans.ContextStoreSpan()].
+// If so, it calls NewSpan() on that span, calls 'SetDisplayName(name)' on
+// the new child span, and returns (in reverse order) the new span, a copy
+// of the Context decorated with the new span, and a *deep* copy of the
+// Request (with the new Context).
+//
+// If not, it logs the lack of a span in the Context (including a stack
+// trace) and returns an empty Factory that is mostly useless other than not
+// being 'nil' along with the original Context and a *deep* copy of the
+// original Request (with the original Context).
+//
+// Passing in a separate Context can allow you to avoid making yet another
+// (shallow) copy of the Request by calling 'req.WithContext(ctx)'.  If you
+// pass in 'ctx' as 'nil', then 'req.Context()' is used.
+//
+// Example usage:
+//
+//      // req2 is a *deep* copy to avoid simultaneous access to 'req'
+//      req2, ctx2, span := trace.RequestPushSpan(req, ctx, "span.name")
+//      go func() {
+//          defer span.Finish()
+//          resp, err := transport.RoundTrip(req2)
+//          ...
+//      }()
+//      resp, err := transport.RoundTrip(req)
+//      ...
+//
+// If you do not need a *deep* copy to be made, then you may want to use
+// PushSpan() instead (you can save the value of the prior Request and/or
+// Context before you call it, if needed).
+//
+func RequestPushSpan(
+	req *http.Request, ctx context.Context, name string,
+) (*http.Request, context.Context, spans.Factory) {
+	if nil == req {
+		lager.Exit(ctx).WithStack(1, 0).MMap(
+			"trace.RequestPushSpan() passed nil Request")
+	}
+	if nil == ctx {
+		ctx = req.Context()
+	}
+	span := spans.ContextGetSpan(ctx)
+	if nil == span {
+		lager.Warn(ctx).WithStack(1, 0).MMap(
+			"trace.RequestPushSpan() passed undecorated Context")
+		req = req.Clone(ctx) // Deep clone required to preserve expectations.
+		return req, ctx, spans.ROSpan{}
+	}
+	kid := span.NewSpan().SetDisplayName(name)
+	ctx = spans.ContextStoreSpan(ctx, kid)
+	req = req.Clone(ctx)
+	return req, ctx, kid
+}
+
+// PushSpan() takes pointers to an *http.Request and to a Context and takes
+// a name to give to a new span.  If 'pCtx' or '*pCtx' is 'nil', then
+// '(*pReq).Context()' is used.  If 'pReq' or '*pReq' is also 'nil' or the
+// Context is not decorated [see spans.ContextStoreSpan()] with a Factory,
+// then the lack of a span is logged (with a stack trace) and an empty
+// Factory that is mostly useless other than not being 'nil'.
+//
+// Otherwise, it calls 'NewSpan().SetDisplayName(name)' on the span and
+// returns the new span.  If 'pCtx' is not 'nil', then '*pCtx' is set to a
+// copy of the Context decorated with the new span.  If 'pReq' and '*pReq'
+// are not 'nil', then '*pReq' is set to a *shallow* copy of '*pReq' (with
+// the new Context).
+//
+// Example usage:
+//
+//      defer trace.PushSpan(&req, &ctx, "span.name").AddPairs(
+//          "user", user,
+//      ).Finish()
+//
+func PushSpan(
+	pReq **http.Request, pCtx *context.Context, name string,
+) spans.Factory {
+	var ctx context.Context
+	if nil != pCtx && nil != *pCtx {
+		ctx = *pCtx
+	} else if nil != pReq && nil != *pReq {
+		ctx = (*pReq).Context()
+	} else {
+		lager.Warn().WithStack(1, 0).MMap(
+			"trace.PushSpan() passed no Context")
+		return spans.ROSpan{}
+	}
+	span := spans.ContextGetSpan(ctx)
+	if nil == span {
+		lager.Warn(ctx).WithStack(1, 0).MMap(
+			"trace.PushSpan() passed undecorated Context")
+		return spans.ROSpan{}
+	}
+	kid := span.NewSpan().SetDisplayName(name)
+	ctx = spans.ContextStoreSpan(ctx, kid)
+	if nil != pCtx {
+		*pCtx = ctx
+	}
+	if nil != pReq && nil != *pReq {
+		*pReq = (*pReq).WithContext(ctx)
+	}
+	return kid
+}
+
 func (s *Span) initDetails() *Span {
 	s.details = &ct2.Span{SpanId: spans.HexSpanID(s.GetSpanID())}
 	if !s.start.IsZero() {
