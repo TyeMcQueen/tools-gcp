@@ -4,6 +4,7 @@
 // References to "ct2." refer to items imported from the
 // "google.golang.org/api/cloudtrace/v2" module.  References to "lager."
 // refer to items imported from "github.com/TyeMcQueen/go-lager".
+// "spans." refers to "github.com/TyeMcQueen/go-lager/gcp-spans".
 //
 package trace
 
@@ -40,10 +41,8 @@ type Client struct {
 // spans within it.  It also registers the span with GCP when Finish() is
 // called on it [unless it was created via Import()].
 //
-// A Span object is expected to be used only from a single goroutine and so
-// no locking is implemented.  If you wish to use a single Span object from
-// multiple goroutines, then you'll need to use your own sync.Mutex or
-// similar.
+// A Span object is expected to be modified only from a single goroutine
+// and so no locking is implemented.
 //
 type Span struct {
 	spans.ROSpan
@@ -66,7 +65,7 @@ type Registrar struct {
 	proj    string
 	runners int
 	queue   chan<- Span
-	done    <-chan bool
+	dones   <-chan bool
 }
 
 var warnOnce sync.Once
@@ -167,8 +166,11 @@ func MustNewClient(ctx context.Context, svc *ct2.Service) Client {
 // useful when testing).
 //
 func StartServer(
-	pCtx *context.Context, runners int, pRegs... **Registrar,
+	pCtx *context.Context, runners int, pRegs ...**Registrar,
 ) func() {
+	if nil == *pCtx {
+		*pCtx = context.Background()
+	}
 	spanReg := MustNewRegistrar("", MustNewClient(*pCtx, nil), runners)
 	*pCtx = spans.ContextStoreSpan(*pCtx, spanReg.NewFactory())
 	for _, p := range pRegs {
@@ -193,11 +195,11 @@ func NewRegistrar(
 			project = dflt
 		}
 	}
-	queue, done, err := startRegistrar(project, client, runners)
+	queue, dones, err := startRegistrar(project, client, runners)
 	if nil != err {
 		return nil, err
 	}
-	return &Registrar{project, runners, queue, done}, nil
+	return &Registrar{project, runners, queue, dones}, nil
 }
 
 // MustNewRegistrar() calls NewRegistrar() and, if that fails, uses
@@ -223,13 +225,13 @@ func MustNewRegistrar(
 // runners (which ends their waiting) and then returns.
 //
 func (r *Registrar) WaitForIdleRunners() {
-	dones := make(chan Span, 0)
-	empty := Span{ch: dones}
+	readys := make(chan Span, 0)
+	empty := Span{ch: readys}
 	for i := r.runners; 0 < i; i-- {
 		r.queue <- empty
 	}
 	for i := r.runners; 0 < i; i-- {
-		<- dones
+		<-readys
 	}
 }
 
@@ -255,7 +257,7 @@ func (r *Registrar) Halt() {
 	close(r.queue)
 	r.queue = nil
 	for ; 0 < r.runners; r.runners-- {
-		_ = <-r.done
+		_ = <-r.dones
 	}
 }
 
@@ -263,13 +265,13 @@ func startRegistrar(
 	project string, client Client, runners int,
 ) (chan<- Span, <-chan bool, error) {
 	queue := make(chan Span, runners)
-	done := make(chan bool, runners)
+	dones := make(chan bool, runners)
 	prefix := "projects/" + project + "/"
 	for ; 0 < runners; runners-- {
 		go func() {
 			for sp := range queue {
 				// Sending an empty Span is used by tests to
-				// wait for the previous CreateSpan() call to finish:
+				// wait for the previous CreateSpan() call(s) to finish:
 				if 0 == sp.GetSpanID() {
 					if sp.ch != queue {
 						sp.ch <- sp
@@ -285,10 +287,10 @@ func startRegistrar(
 						"err", err, "span", sp.details)
 				}
 			}
-			done <- true
+			dones <- true
 		}()
 	}
-	return queue, done, nil
+	return queue, dones, nil
 }
 
 func (s *Span) initDetails() *Span {
@@ -303,17 +305,22 @@ func (s *Span) initDetails() *Span {
 }
 
 // logIfEmpty() returns 'true' and logs an error with a stack trace if the
-// invoking factory is empty.  If 'orImported' is 'true', then this is also
-// done if the factory contains an Import()ed span.  Otherwise it logs
+// invoking Factory is empty.  If 'orImported' is 'true', then this is also
+// done if the Factory contains an Import()ed span.  Otherwise it logs
 // nothing and returns 'false'.
 //
 func (s Span) logIfEmpty(orImported bool) bool {
 	if 0 == s.GetSpanID() {
-		lager.Fail().WithStack(1, -1, 3).List(
+		lager.Fail().WithStack(1, -1).MMap(
 			"Disallowed method called on empty spans.Factory")
 		return true
+	} else if !s.end.IsZero() {
+		lager.Fail().WithStack(1, -1).MMap(
+			"Disallowed method called on Finish()ed spans.Factory",
+			"spanName", s.details.DisplayName)
+		return true
 	} else if orImported && s.start.IsZero() {
-		lager.Fail().WithStack(1, -1, 3).List(
+		lager.Fail().WithStack(1, -1).MMap(
 			"Disallowed method called on Import()ed spans.Factory")
 		return true
 	}
@@ -321,14 +328,14 @@ func (s Span) logIfEmpty(orImported bool) bool {
 }
 
 // GetStart() returns the time at which the span began.  Returns a zero
-// time if the factory is empty or the contained span was Import()ed.
+// time if the Factory is empty or the contained span was Import()ed.
 //
 func (s Span) GetStart() time.Time {
 	return s.start
 }
 
-// Import() returns a new factory containing a span created somewhere
-// else.  If the traceID or spanID is invalid, then a 'nil' factory and
+// Import() returns a new Factory containing a span created somewhere
+// else.  If the traceID or spanID is invalid, then a 'nil' Factory and
 // an error are returned.  The usual reason to do this is so that you can
 // then call NewSubSpan().
 //
@@ -341,14 +348,19 @@ func (s Span) Import(traceID string, spanID uint64) (spans.Factory, error) {
 	return sp, nil
 }
 
+// ImportFromHeaders() returns a new Factory containing a span created
+// somewhere else based on the "X-Cloud-Trace-Context:" header.  If the
+// header does not contain a valid CloudContext value, then a valid but
+// empty Factory is returned.
+//
 func (s Span) ImportFromHeaders(headers http.Header) spans.Factory {
-	ROSpan := s.ROSpan.ImportFromHeaders(headers)
-	sp := &Span{ROSpan: ROSpan.(spans.ROSpan), ch: s.ch}
+	roSpan := s.ROSpan.ImportFromHeaders(headers)
+	sp := &Span{ROSpan: roSpan.(spans.ROSpan), ch: s.ch}
 	return sp
 }
 
-// NewTrace() returns a new factory holding a new span, part of a new
-// trace.  Any span held in the invoking factory is ignored.
+// NewTrace() returns a new Factory holding a new span, part of a new
+// trace.  Any span held in the invoking Factory is ignored.
 //
 func (s Span) NewTrace() spans.Factory {
 	ROSpan, err := s.ROSpan.Import(
@@ -361,17 +373,18 @@ func (s Span) NewTrace() spans.Factory {
 	return sp.initDetails()
 }
 
-// NewSubSpan() returns a new factory holding a new span that is a
-// sub-span of the span contained in the invoking factory.  If the
-// invoking factory was empty, then a failure with a stack trace is
-// logged and a 'nil' factory is returned.
+// NewSubSpan() returns a new Factory holding a new span that is a
+// sub-span of the span contained in the invoking Factory.  If the
+// invoking Factory was empty, then a failure with a stack trace is
+// logged and a 'nil' Factory is returned.
 //
 func (s Span) NewSubSpan() spans.Factory {
 	if s.logIfEmpty(false) {
 		return nil
 	}
+
 	if 0 == s.kidSpan { // Creating first sub-span
-		s.kidSpan = s.GetSpanID() // Want kidSpan to be spanID+spanInc below
+		s.kidSpan = s.GetSpanID()    // Want kidSpan to be spanID+spanInc below
 		s.spanInc = 1 | NewSpanID(0) // Must be odd; mutually prime to 2**64
 	}
 	s.kidSpan += s.spanInc
@@ -381,9 +394,9 @@ func (s Span) NewSubSpan() spans.Factory {
 	if nil != s.details {
 		s.details.ChildSpanCount++
 	}
-
 	ro := s.ROSpan
 	ro.SetSpanID(s.kidSpan)
+
 	kid := &Span{ROSpan: ro, ch: s.ch, start: time.Now()}
 	kid.momSpan = s.GetSpanID()
 	kid.initDetails()
@@ -393,8 +406,8 @@ func (s Span) NewSubSpan() spans.Factory {
 	return kid
 }
 
-// NewSpan() returns a new factory holding a new span; either NewTrace() or
-// NewSubSpan(), depending on whether the invoking factory is empty.
+// NewSpan() returns a new Factory holding a new span; either NewTrace() or
+// NewSubSpan(), depending on whether the invoking Factory is empty.
 //
 func (s Span) NewSpan() spans.Factory {
 	if 0 == s.GetSpanID() {
@@ -404,7 +417,7 @@ func (s Span) NewSpan() spans.Factory {
 }
 
 // Sets the span kind to "SERVER".  Does nothing except log a failure
-// with a stack trace if the factory is empty or Import()ed.
+// with a stack trace if the Factory is empty or Import()ed.
 //
 func (s *Span) SetIsServer() {
 	if !s.logIfEmpty(true) {
@@ -413,7 +426,7 @@ func (s *Span) SetIsServer() {
 }
 
 // Sets the span kind to "CLIENT".  Does nothing except log a failure
-// with a stack trace if the factory is empty or Import()ed.
+// with a stack trace if the Factory is empty or Import()ed.
 //
 func (s *Span) SetIsClient() {
 	if !s.logIfEmpty(true) {
@@ -422,7 +435,7 @@ func (s *Span) SetIsClient() {
 }
 
 // Sets the span kind to "PRODUCER".  Does nothing except log a failure
-// with a stack trace if the factory is empty or Import()ed.
+// with a stack trace if the Factory is empty or Import()ed.
 //
 func (s *Span) SetIsPublisher() {
 	if !s.logIfEmpty(true) {
@@ -431,7 +444,7 @@ func (s *Span) SetIsPublisher() {
 }
 
 // Sets the span kind to "CONSUMER".  Does nothing except log a failure
-// with a stack trace if the factory is empty or Import()ed.
+// with a stack trace if the Factory is empty or Import()ed.
 //
 func (s *Span) SetIsSubscriber() {
 	if !s.logIfEmpty(true) {
@@ -440,7 +453,7 @@ func (s *Span) SetIsSubscriber() {
 }
 
 // SetDisplayName() sets the display name on the contained span.  Does
-// nothing except log a failure with a stack trace if the factory is
+// nothing except log a failure with a stack trace if the Factory is
 // empty or Import()ed.
 //
 func (s *Span) SetDisplayName(desc string) {
@@ -453,12 +466,13 @@ func (s *Span) SetDisplayName(desc string) {
 }
 
 // AddAttribute() adds an attribute key/value pair to the contained span.
-// Does nothing except log a failure with a stack trace if the factory is
+// Does nothing except log a failure with a stack trace if the Factory is
 // empty or Import()ed (even returning a 'nil' error).
 //
-// 'val' can be a 'string', an 'int' or 'int64', or a 'bool'.  If 'key'
-// is empty or 'val' is not one of the listed types, then an error is
-// returned and the attribute is not added.
+// 'val' can be a 'string', 'int64', or a 'bool'.  'int' values will be
+// promoted to 'int64'.  If
+// 'key' is empty or 'val' is not one of the listed types, then an error
+// is returned and the attribute is not added.
 //
 func (s *Span) AddAttribute(key string, val interface{}) error {
 	if s.logIfEmpty(true) {
@@ -489,8 +503,9 @@ func (s *Span) AddAttribute(key string, val interface{}) error {
 // SetStatusCode() sets the status code on the contained span.
 // 'code' is expected to be a value from
 // google.golang.org/genproto/googleapis/rpc/code but this is not
-// verified.  Does nothing except log a failure with a stack trace
-// if the factory is empty or Import()ed.
+// verified.  HTTP status codes are also understood by the library.
+// Does nothing except log a failure with a stack trace if the Factory
+// is empty or Import()ed.
 //
 func (s *Span) SetStatusCode(code int64) {
 	if s.logIfEmpty(true) {
@@ -503,8 +518,9 @@ func (s *Span) SetStatusCode(code int64) {
 }
 
 // SetStatusMessage() sets the status message string on the contained
-// span.  Does nothing except log a failure with a stack trace if the
-// factory is empty or Import()ed.
+// span.  By convention, only a failure should set a status message.
+// Does nothing except log a failure with a stack trace if the Factory
+// is empty or Import()ed.
 //
 func (s *Span) SetStatusMessage(msg string) {
 	if s.logIfEmpty(true) {
@@ -516,13 +532,13 @@ func (s *Span) SetStatusMessage(msg string) {
 	s.details.Status.Message = msg
 }
 
-// Finish() notifies the factory that the contained span is finished.
-// The factory will be empty afterward.  The factory will arrange for the
-// span to be registered.
+// Finish() notifies the Factory that the contained span is finished.
+// The Factory will be read-only (as if empty) afterward.  The Factory will
+// arrange for the span to be registered.
 //
-// The returned value is the duration of the span's life.  If the factory
-// was already empty or the contained span was from Import(), then a
-// failure with a stack trace is logged and a 0 duration is returned.
+// The returned value is the duration of the span's life.  If the Factory
+// was already empty or the contained span was Import()ed, then a failure
+// with a stack trace is logged and a 0 duration is returned.
 //
 func (s *Span) Finish() time.Duration {
 	if s.logIfEmpty(true) {
