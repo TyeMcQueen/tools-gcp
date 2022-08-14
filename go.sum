@@ -59,8 +59,8 @@ dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
-github.com/TyeMcQueen/go-lager v1.2.2 h1:1/F3tD8NLXggBC2nGpYOkbY/scJm2uBiY5njF0C9fMc=
-github.com/TyeMcQueen/go-lager v1.2.2/go.mod h1:Nb26gx5hPyidwY0/gOEuKQiLiyajTvwkeryG2Hfg3CM=
+github.com/TyeMcQueen/go-lager v1.2.3 h1:tYJFDQz0fr6xvMxxngWVgZsVdnjoyi468Kfi1G5wuHM=
+github.com/TyeMcQueen/go-lager v1.2.3/go.mod h1:Nb26gx5hPyidwY0/gOEuKQiLiyajTvwkeryG2Hfg3CM=
 github.com/TyeMcQueen/go-tutl v1.1.1 h1:L0nw76DcvuXssivztOhXOUkNfs+gHbeqT7fEEnuxt5g=
 github.com/TyeMcQueen/go-tutl v1.1.1/go.mod h1:nW7zRt1PqznqPaES2UHtn9LjHis4KQG58b1MAlB+SWA=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
