@@ -369,25 +369,26 @@ func (s Span) ImportFromHeaders(headers http.Header) spans.Factory {
 func (s Span) NewTrace() spans.Factory {
 	ROSpan, err := s.ROSpan.Import(
 		NewTraceID(s.GetTraceID()), NewSpanID(s.GetSpanID()))
+	sp := &Span{ROSpan: ROSpan.(spans.ROSpan), ch: s.ch}
 	if nil != err {
 		lager.Fail().MMap("Impossibly got invalid trace/span ID", "err", err)
-		return nil
+		return sp
 	}
-	sp := &Span{ROSpan: ROSpan.(spans.ROSpan), ch: s.ch, start: time.Now()}
+	sp.start = time.Now()
 	return sp.initDetails()
 }
 
 // NewSubSpan() returns a new Factory holding a new span that is a
 // sub-span of the span contained in the invoking Factory.  If the
 // invoking Factory was empty, then a failure with a stack trace is
-// logged and a 'nil' Factory is returned.
+// logged and the empty Factory is returned.
 //
 // NewSubSpan() locks the calling span so that you can safely call
 // NewSubSpan() on the same parent span from multiple go routines.
 //
 func (s *Span) NewSubSpan() spans.Factory {
 	if s.logIfEmpty(false) {
-		return nil
+		return s
 	}
 
 	s.mu.Lock()
