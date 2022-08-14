@@ -42,17 +42,21 @@ type Client struct {
 // called on it [unless it was created via Import()].
 //
 // A Span object is expected to be modified only from a single goroutine
-// and so no locking is implemented.
+// and so no locking is implemented.  Creation of sub-spans does implement
+// locking so that multiple go routines can safely create sub-spans from
+// the same span without additional locking.
 //
 type Span struct {
 	spans.ROSpan
 	ch      chan<- Span
-	spanInc uint64 // Amount to increment to make next span ID.
-	kidSpan uint64 // The previous child span ID used.
-	momSpan uint64
 	start   time.Time
 	end     time.Time
+	parent  *Span
 	details *ct2.Span
+
+	mu      sync.Mutex // Lock used by NewSubSpan() for below items:
+	spanInc uint64     // Amount to increment to make next span ID.
+	kidSpan uint64     // The previous child span ID used.
 }
 
 // Registrar is mostly just an object to use to Halt() the registration
@@ -298,8 +302,8 @@ func (s *Span) initDetails() *Span {
 	if !s.start.IsZero() {
 		s.details.StartTime = TimeAsString(s.start)
 	}
-	if 0 != s.momSpan {
-		s.details.ParentSpanId = spans.HexSpanID(s.momSpan)
+	if nil != s.parent {
+		s.details.ParentSpanId = spans.HexSpanID(s.parent.GetSpanID())
 	}
 	return s
 }
@@ -378,11 +382,15 @@ func (s Span) NewTrace() spans.Factory {
 // invoking Factory was empty, then a failure with a stack trace is
 // logged and a 'nil' Factory is returned.
 //
-func (s Span) NewSubSpan() spans.Factory {
+// NewSubSpan() locks the calling span so that you can safely call
+// NewSubSpan() on the same parent span from multiple go routines.
+//
+func (s *Span) NewSubSpan() spans.Factory {
 	if s.logIfEmpty(false) {
 		return nil
 	}
 
+	s.mu.Lock()
 	if 0 == s.kidSpan { // Creating first sub-span
 		s.kidSpan = s.GetSpanID()    // Want kidSpan to be spanID+spanInc below
 		s.spanInc = 1 | NewSpanID(0) // Must be odd; mutually prime to 2**64
@@ -396,9 +404,10 @@ func (s Span) NewSubSpan() spans.Factory {
 	}
 	ro := s.ROSpan
 	ro.SetSpanID(s.kidSpan)
+	s.mu.Unlock()
 
 	kid := &Span{ROSpan: ro, ch: s.ch, start: time.Now()}
-	kid.momSpan = s.GetSpanID()
+	kid.parent = s
 	kid.initDetails()
 	if !s.start.IsZero() {
 		kid.details.SameProcessAsParentSpan = true
@@ -409,7 +418,7 @@ func (s Span) NewSubSpan() spans.Factory {
 // NewSpan() returns a new Factory holding a new span; either NewTrace() or
 // NewSubSpan(), depending on whether the invoking Factory is empty.
 //
-func (s Span) NewSpan() spans.Factory {
+func (s *Span) NewSpan() spans.Factory {
 	if 0 == s.GetSpanID() {
 		return s.NewTrace()
 	}
