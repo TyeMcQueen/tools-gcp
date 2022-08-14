@@ -126,7 +126,7 @@ func TestCombineBoundaries(t *testing.T) {
 			1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0},
 		BucketOptions: bounds,
 		Count:         35,
-		Mean:          191868.0/35.0,
+		Mean:          191868.0 / 35.0,
 	})
 	u.Circa(12, 191868, sum, "spec bucket sum")
 	u.Is(35, h.SampleCount, "spec bucket hits")
