@@ -22,6 +22,7 @@ import (
 
 	"github.com/TyeMcQueen/go-lager"
 	"github.com/TyeMcQueen/go-lager/gcp-spans"
+	"github.com/TyeMcQueen/tools-gcp/conn"
 	ct2 "google.golang.org/api/cloudtrace/v2"
 //  api "google.golang.org/api/googleapi"
 )
@@ -269,12 +270,30 @@ func (r *Registrar) Halt() {
 	}
 }
 
+func EnvInteger(tacit int, envvar string) int {
+	if "" == envvar {
+		lager.Exit().WithCaller(1).List(
+			"Empty environment variable name passed to EnvInteger()")
+	}
+	val := os.Getenv(envvar)
+	if "" == val {
+		return tacit
+	}
+	i, err := strconv.ParseInt(val, 10, 32)
+	if nil != err {
+		lager.Exit().MMap("Invalid integer value",
+			"EnvVar", envvar, "Value", val, "Error", err)
+	}
+	return int(i)
+}
+
 func startRegistrar(
 	project string, client Client, runners int,
 ) (chan<- Span, <-chan bool, error) {
-	queue := make(chan Span, runners)
+	queue := make(chan Span, EnvInteger(1000, "SPAN_QUEUE_CAPACITY"))
 	dones := make(chan bool, runners)
 	prefix := "projects/" + project + "/"
+	maxLag := conn.EnvDuration("SPAN_CREATE_TIMEOUT", "2s")
 	for ; 0 < runners; runners-- {
 		go func() {
 			for sp := range queue {
@@ -286,10 +305,13 @@ func startRegistrar(
 					}
 					continue
 				}
-				// TODO!  Add a reasonable timeout!!
+				ctx := context.Background()
+				can := conn.Timeout(&ctx, maxLag)
+				start := time.Now()
 				_, err := client.ss.CreateSpan(
 					prefix+sp.GetSpanPath(), sp.details,
-				).Do()
+				).Context(ctx).Do()
+				can()
 				if nil != err {
 					lager.Fail().MMap("Failed to create span",
 						"err", err, "span", sp.details)
@@ -648,6 +670,9 @@ func (s *Span) Finish() time.Duration {
 	}
 	s.end = time.Now()
 	s.details.EndTime = TimeAsString(s.end)
-	s.ch <- *s
+	select {
+	case s.ch <- *s:
+	default:
+	}
 	return s.end.Sub(s.start)
 }
