@@ -23,6 +23,7 @@ import (
 	"github.com/TyeMcQueen/go-lager"
 	"github.com/TyeMcQueen/go-lager/gcp-spans"
 	"github.com/TyeMcQueen/tools-gcp/conn"
+	"github.com/TyeMcQueen/tools-gcp/metric"
 	ct2 "google.golang.org/api/cloudtrace/v2"
 //  api "google.golang.org/api/googleapi"
 )
@@ -294,9 +295,15 @@ func startRegistrar(
 	dones := make(chan bool, runners)
 	prefix := "projects/" + project + "/"
 	maxLag := conn.EnvDuration("SPAN_CREATE_TIMEOUT", "2s")
+	capacity, err := metric.NewCapacityUsage(
+		float64(cap(queue)), "span-queue", os.Getenv("LAGER_SPAN_PREFIX"), "1m")
+	if nil != err {
+		lager.Exit().MMap("Can't monitor span queue capacity", "error", err)
+	}
 	for ; 0 < runners; runners-- {
 		go func() {
 			for sp := range queue {
+				capacity.Record(float64(len(queue)))
 				// Sending an empty Span is used by tests to
 				// wait for the previous CreateSpan() call(s) to finish:
 				if 0 == sp.GetSpanID() {
@@ -311,11 +318,16 @@ func startRegistrar(
 				_, err := client.ss.CreateSpan(
 					prefix+sp.GetSpanPath(), sp.details,
 				).Context(ctx).Do()
-				can()
-				if nil != err {
+				if nil == err {
+					spanCreated(start, "ok")
+				} else if nil != ctx.Err() {
+					spanCreated(start, "timeout")
+				} else {
+					spanCreated(start, "fail")
 					lager.Fail().MMap("Failed to create span",
 						"err", err, "span", sp.details)
 				}
+				can()
 			}
 			dones <- true
 		}()
@@ -677,6 +689,7 @@ func (s *Span) Finish() time.Duration {
 	select {
 	case s.ch <- *s:
 	default:
+		spanDropped()
 	}
 	return s.end.Sub(s.start)
 }
