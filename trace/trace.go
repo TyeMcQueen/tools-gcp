@@ -32,6 +32,10 @@ func TimeAsString(when time.Time) string {
 	return when.In(time.UTC).Format(ZuluTime)
 }
 
+type Stringer interface {
+	String() string
+}
+
 // See NewClient().
 type Client struct {
 	ss *ct2.ProjectsTracesSpansService
@@ -490,7 +494,8 @@ func (s *Span) SetDisplayName(desc string) spans.Factory {
 // empty or Import()ed (even returning a 'nil' error).
 //
 // 'val' can be a 'string', 'int64', or a 'bool'.  'int' values will be
-// promoted to 'int64'.  If
+// promoted to 'int64'.  Other values that have a String() or an Error()
+// method will have that method used to convert them to a string.  If
 // 'key' is empty or 'val' is not one of the listed types, then an error
 // is returned and the attribute is not added.
 //
@@ -498,26 +503,85 @@ func (s *Span) AddAttribute(key string, val interface{}) error {
 	if s.logIfEmpty(true) {
 		return nil
 	}
+	return s.addAttribute(key, val, false)
+}
+
+// addAttribute() is AddAttribute() but can be told to silently ignore zero
+// values ('0', 'false', 'nil') for use by AddPairs().
+//
+func (s *Span) addAttribute(key string, val interface{}, noZero bool) error {
+	if "" == key {
+		return fmt.Errorf("AddAttribute(): 'key' must not be empty string")
+	}
+	var av ct2.AttributeValue
+	if noZero && nil == val {
+		return nil
+	}
+	switch t := val.(type) {
+	case string:
+		av.StringValue = &ct2.TruncatableString{Value: t}
+	case int64:
+		if noZero && 0 == t {
+			return nil
+		}
+		av.IntValue = t
+	case int:
+		if noZero && 0 == t {
+			return nil
+		}
+		av.IntValue = int64(t)
+	case bool:
+		if noZero && !t {
+			return nil
+		}
+		av.BoolValue = t
+	case error:
+		av.StringValue = &ct2.TruncatableString{Value: t.Error()}
+	case Stringer:
+		av.StringValue = &ct2.TruncatableString{Value: t.String()}
+	default:
+		return fmt.Errorf("AddAttribute(): Invalid value type (%T)", val)
+	}
 	if nil == s.details.Attributes {
 		s.details.Attributes = &ct2.Attributes{
 			AttributeMap: make(map[string]ct2.AttributeValue),
 		}
 	}
-	var av ct2.AttributeValue
-	switch t := val.(type) {
-	case string:
-		av.StringValue = &ct2.TruncatableString{Value: t}
-	case int64:
-		av.IntValue = t
-	case int:
-		av.IntValue = int64(t)
-	case bool:
-		av.BoolValue = t
-	default:
-		return fmt.Errorf("AddAttribute(): Invalid value type (%T)", val)
-	}
 	s.details.Attributes.AttributeMap[key] = av
 	return nil
+}
+
+// AddPairs() takes a list of attribute key/value pairs.  For each pair,
+// AddAttribute() is called and any returned error is logged (including
+// a reference to the line of code that called AddPairs).  Always returns
+// the calling Factory so further method calls can be chained.
+//
+// AddPairs() silently ignores 'zero' values except "" ('0', 'false', 'nil')
+// rather than either logging an error or adding them only to have the value
+// show up as "undefined".
+//
+// Does nothing except log a single failure with a stack trace if the
+// Factory is empty or Import()ed.
+//
+func (s *Span) AddPairs(pairs ...interface{}) spans.Factory {
+	if s.logIfEmpty(true) {
+		return s
+	}
+	log := lager.Fail().WithCaller(1)
+	for i := 0; i < len(pairs); i += 2 {
+		ix := pairs[i]
+		if len(pairs) <= i+1 {
+			log.MMap("Ignoring unpaired last arg to trace.Span AddPairs()",
+				"arg", ix)
+		} else if key, ok := ix.(string); !ok {
+			log.MMap("Non-string key passed to trace.Span AddPairs()",
+				"type", fmt.Sprintf("%T", ix), "key", ix, "arg index", i)
+		} else if err := s.addAttribute(key, pairs[i+1], true); nil != err {
+			log.MMap("Error adding attribute to Span",
+				"key", key, "val", pairs[i+1], "error", err)
+		}
+	}
+	return s
 }
 
 // SetStatusCode() sets the status code on the contained span.
