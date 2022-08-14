@@ -3,7 +3,7 @@ module github.com/TyeMcQueen/tools-gcp
 go 1.14
 
 require (
-	github.com/TyeMcQueen/go-lager v1.2.2
+	github.com/TyeMcQueen/go-lager v1.2.3
 	github.com/TyeMcQueen/go-tutl v1.1.1
 	github.com/golang/protobuf v1.5.2
 	github.com/prometheus/client_golang v1.5.1
