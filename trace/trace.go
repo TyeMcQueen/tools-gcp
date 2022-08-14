@@ -427,52 +427,62 @@ func (s *Span) NewSpan() spans.Factory {
 }
 
 // Sets the span kind to "SERVER".  Does nothing except log a failure
-// with a stack trace if the Factory is empty or Import()ed.
+// with a stack trace if the Factory is empty or Import()ed.  Always returns
+// the calling Factory so further method calls can be chained.
 //
-func (s *Span) SetIsServer() {
+func (s *Span) SetIsServer() spans.Factory {
 	if !s.logIfEmpty(true) {
 		s.details.SpanKind = "SERVER"
 	}
+	return s
 }
 
 // Sets the span kind to "CLIENT".  Does nothing except log a failure
-// with a stack trace if the Factory is empty or Import()ed.
+// with a stack trace if the Factory is empty or Import()ed.  Always returns
+// the calling Factory so further method calls can be chained.
 //
-func (s *Span) SetIsClient() {
+func (s *Span) SetIsClient() spans.Factory {
 	if !s.logIfEmpty(true) {
 		s.details.SpanKind = "CLIENT"
 	}
+	return s
 }
 
 // Sets the span kind to "PRODUCER".  Does nothing except log a failure
-// with a stack trace if the Factory is empty or Import()ed.
+// with a stack trace if the Factory is empty or Import()ed.  Always returns
+// the calling Factory so further method calls can be chained.
 //
-func (s *Span) SetIsPublisher() {
+func (s *Span) SetIsPublisher() spans.Factory {
 	if !s.logIfEmpty(true) {
 		s.details.SpanKind = "PRODUCER"
 	}
+	return s
 }
 
 // Sets the span kind to "CONSUMER".  Does nothing except log a failure
-// with a stack trace if the Factory is empty or Import()ed.
+// with a stack trace if the Factory is empty or Import()ed.  Always returns
+// the calling Factory so further method calls can be chained.
 //
-func (s *Span) SetIsSubscriber() {
+func (s *Span) SetIsSubscriber() spans.Factory {
 	if !s.logIfEmpty(true) {
 		s.details.SpanKind = "CONSUMER"
 	}
+	return s
 }
 
 // SetDisplayName() sets the display name on the contained span.  Does
 // nothing except log a failure with a stack trace if the Factory is
-// empty or Import()ed.
+// empty or Import()ed.  Always returns the calling Factory so further
+// method calls can be chained.
 //
-func (s *Span) SetDisplayName(desc string) {
+func (s *Span) SetDisplayName(desc string) spans.Factory {
 	if !s.logIfEmpty(true) {
 		if nil == s.details.DisplayName {
 			s.details.DisplayName = &ct2.TruncatableString{}
 		}
 		s.details.DisplayName.Value = desc
 	}
+	return s
 }
 
 // AddAttribute() adds an attribute key/value pair to the contained span.
@@ -515,31 +525,35 @@ func (s *Span) AddAttribute(key string, val interface{}) error {
 // google.golang.org/genproto/googleapis/rpc/code but this is not
 // verified.  HTTP status codes are also understood by the library.
 // Does nothing except log a failure with a stack trace if the Factory
-// is empty or Import()ed.
+// is empty or Import()ed.  Always returns the calling Factory so further
+// method calls can be chained.
 //
-func (s *Span) SetStatusCode(code int64) {
+func (s *Span) SetStatusCode(code int64) spans.Factory {
 	if s.logIfEmpty(true) {
-		return
+		return s
 	}
 	if nil == s.details.Status {
 		s.details.Status = &ct2.Status{}
 	}
 	s.details.Status.Code = code
+	return s
 }
 
 // SetStatusMessage() sets the status message string on the contained
 // span.  By convention, only a failure should set a status message.
 // Does nothing except log a failure with a stack trace if the Factory
-// is empty or Import()ed.
+// is empty or Import()ed.  Always returns the calling Factory so further
+// method calls can be chained.
 //
-func (s *Span) SetStatusMessage(msg string) {
+func (s *Span) SetStatusMessage(msg string) spans.Factory {
 	if s.logIfEmpty(true) {
-		return
+		return s
 	}
 	if nil == s.details.Status {
 		s.details.Status = &ct2.Status{}
 	}
 	s.details.Status.Message = msg
+	return s
 }
 
 // Finish() notifies the Factory that the contained span is finished.
