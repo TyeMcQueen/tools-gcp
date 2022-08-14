@@ -514,10 +514,14 @@ func (s *Span) SetIsSubscriber() spans.Factory {
 //
 func (s *Span) SetDisplayName(desc string) spans.Factory {
 	if !s.logIfEmpty(true) {
-		if nil == s.details.DisplayName {
-			s.details.DisplayName = &ct2.TruncatableString{}
+		if "" == desc {
+			s.details.DisplayName = nil
+		} else {
+			if nil == s.details.DisplayName {
+				s.details.DisplayName = &ct2.TruncatableString{}
+			}
+			s.details.DisplayName.Value = desc
 		}
-		s.details.DisplayName.Value = desc
 	}
 	return s
 }
