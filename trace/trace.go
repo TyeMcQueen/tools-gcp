@@ -576,7 +576,7 @@ func (s Span) NewTrace() spans.Factory {
 //
 func (s *Span) NewSubSpan() spans.Factory {
 	if s.logIfEmpty(false) {
-		return s
+		return spans.ROSpan{}
 	}
 
 	s.mu.Lock()
