@@ -60,9 +60,9 @@ type Span struct {
 	parent  *Span
 	details *ct2.Span
 
-	mu      sync.Mutex // Lock used by NewSubSpan() for below items:
-	spanInc uint64     // Amount to increment to make next span ID.
-	kidSpan uint64     // The previous child span ID used.
+	mu      *sync.Mutex // Lock used by NewSubSpan() for below items:
+	spanInc uint64      // Amount to increment to make next span ID.
+	kidSpan uint64      // The previous child span ID used.
 }
 
 // Registrar is mostly just an object to use to Halt() the registration
@@ -245,11 +245,15 @@ func (r *Registrar) WaitForIdleRunners() {
 	}
 }
 
+func newSpan(roSpan spans.ROSpan, ch chan<- Span) *Span {
+	return &Span{ROSpan: roSpan, ch: ch, mu: new(sync.Mutex)}
+}
+
 // NewFactory() returns a spans.Factory that can be used to create and
 // manipulate spans and eventually register them with GCP Cloud Trace.
 //
 func (r *Registrar) NewFactory() spans.Factory {
-	return &Span{ROSpan: spans.NewROSpan(r.proj), ch: r.queue}
+	return newSpan(spans.NewROSpan(r.proj), r.queue)
 }
 
 // Halt() tells the runners to terminate and waits for them all to finish
@@ -536,7 +540,7 @@ func (s Span) Import(traceID string, spanID uint64) (spans.Factory, error) {
 	if nil != err {
 		return nil, err
 	}
-	sp := &Span{ROSpan: ROSpan.(spans.ROSpan), ch: s.ch}
+	sp := newSpan(ROSpan.(spans.ROSpan), s.ch)
 	return sp, nil
 }
 
@@ -547,7 +551,7 @@ func (s Span) Import(traceID string, spanID uint64) (spans.Factory, error) {
 //
 func (s Span) ImportFromHeaders(headers http.Header) spans.Factory {
 	roSpan := s.ROSpan.ImportFromHeaders(headers)
-	sp := &Span{ROSpan: roSpan.(spans.ROSpan), ch: s.ch}
+	sp := newSpan(roSpan.(spans.ROSpan), s.ch)
 	return sp
 }
 
@@ -557,7 +561,7 @@ func (s Span) ImportFromHeaders(headers http.Header) spans.Factory {
 func (s Span) NewTrace() spans.Factory {
 	ROSpan, err := s.ROSpan.Import(
 		NewTraceID(s.GetTraceID()), NewSpanID(s.GetSpanID()))
-	sp := &Span{ROSpan: ROSpan.(spans.ROSpan), ch: s.ch}
+	sp := newSpan(ROSpan.(spans.ROSpan), s.ch)
 	if nil != err {
 		lager.Fail().MMap("Impossibly got invalid trace/span ID", "err", err)
 		return sp
@@ -595,7 +599,8 @@ func (s *Span) NewSubSpan() spans.Factory {
 	ro.SetSpanID(s.kidSpan)
 	s.mu.Unlock()
 
-	kid := &Span{ROSpan: ro, ch: s.ch, start: time.Now()}
+	kid := newSpan(ro, s.ch)
+	kid.start = time.Now()
 	kid.parent = s
 	kid.initDetails()
 	if !s.start.IsZero() {
