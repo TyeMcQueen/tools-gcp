@@ -1,6 +1,6 @@
 SHELL := bash
 .SHELLFLAGS := -eu -o pipefail -c
-# Mac's gnu Make 3.81 does not support .ONESHELL
+# Mac's gnu Make 3.81 does not support .ONESHELL:
 # .ONESHELL:
 .DELETE_ON_ERROR:
 MAKEFLAGS += --warn-undefined-variables
