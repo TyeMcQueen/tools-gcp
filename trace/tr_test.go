@@ -83,7 +83,7 @@ func TestTrace(t *testing.T) {
 	u.Is("", logs.Bytes(), "logs nothing 1")
 	logs.Reset()
 
-	u.Is(empty, empty.NewSubSpan(), "empty NewSubSpan")
+	u.Is(spans.ROSpan{}, empty.NewSubSpan(), "empty NewSubSpan")
 	u.Like(logs.Bytes(), "empty NewSubSpan logs",
 		"*disallowed method", "*empty span", `"_stack":`)
 	logs.Reset()
