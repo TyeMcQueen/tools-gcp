@@ -489,23 +489,35 @@ func (s *Span) initDetails() *Span {
 	return s
 }
 
+func (s Span) getFailLager() lager.Lager {
+	ctx := context.Background()
+	if "" != s.GetTraceID() {
+		ctx = lager.AddPairs(ctx, lager.GcpTraceKey, s.GetTracePath())
+		if 0 != s.GetSpanID() {
+			ctx = lager.AddPairs(
+				ctx, lager.GcpSpanKey, spans.HexSpanID(s.GetSpanID()))
+		}
+	}
+	return lager.Fail(ctx)
+}
+
 // logIfEmpty() returns 'true' and logs an error with a stack trace if the
-// invoking Factory is empty.  If 'orImported' is 'true', then this is also
-// done if the Factory contains an Import()ed span.  Otherwise it logs
-// nothing and returns 'false'.
+// invoking Factory is empty or Finish()ed.  If 'orImported' is 'true', then
+// this is also done if the Factory contains an Import()ed span.  Otherwise
+// it logs nothing and returns 'false'.
 //
 func (s Span) logIfEmpty(orImported bool) bool {
 	if 0 == s.GetSpanID() {
-		lager.Fail().WithStack(1, -1).MMap(
+		s.getFailLager().WithStack(1, -1).MMap(
 			"Disallowed method called on empty spans.Factory")
 		return true
 	} else if !s.end.IsZero() {
-		lager.Fail().WithStack(1, -1).MMap(
+		s.getFailLager().WithStack(1, -1).MMap(
 			"Disallowed method called on Finish()ed spans.Factory",
 			"spanName", s.details.DisplayName)
 		return true
 	} else if orImported && s.start.IsZero() {
-		lager.Fail().WithStack(1, -1).MMap(
+		s.getFailLager().WithStack(1, -1).MMap(
 			"Disallowed method called on Import()ed spans.Factory")
 		return true
 	}
@@ -760,7 +772,7 @@ func (s *Span) AddPairs(pairs ...interface{}) spans.Factory {
 	if s.logIfEmpty(true) {
 		return s
 	}
-	log := lager.Fail().WithCaller(1)
+	log := s.getFailLager().WithCaller(1)
 	for i := 0; i < len(pairs); i += 2 {
 		ix := pairs[i]
 		if len(pairs) <= i+1 {
