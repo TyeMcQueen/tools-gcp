@@ -585,17 +585,37 @@ func (s Span) NewTrace() spans.Factory {
 // NewSubSpan() returns a new Factory holding a new span that is a
 // sub-span of the span contained in the invoking Factory.  If the
 // invoking Factory was empty, then a failure with a stack trace is
-// logged and the empty Factory is returned.
+// logged and a new, empty Factory is returned.
 //
 // NewSubSpan() locks the calling span so that you can safely call
 // NewSubSpan() on the same parent span from multiple go routines.
 //
+// Only for NewSubSpan(), a Finish()ed span is not considered to be empty.
+// The ability to call NewSubSpan() from a different go routine means that
+// it is not hard to come up with scenarios where a race could lead to
+// NewSubSpan() being called after Finish().
+//
+// For example, say operation X is accomplished by trying both operations X1
+// and X2 simultaneously and using the results of the first one to finish.
+// If X2 finishes first, then a request to cancel X1 is initiated and the
+// result from X2 is immediately returned... and the span for X is
+// Finish()ed.  It will probably not take long for the cancelation of X1 to
+// happen, but in that short window, it is easily possible for a span for X1
+// to be created.
+//
 func (s *Span) NewSubSpan() spans.Factory {
-	if s.logIfEmpty(false) {
+	s.mu.Lock()
+	locked := true
+	defer func() {
+		if locked {
+			s.mu.Unlock()
+		}
+	}()
+
+	if 0 == s.GetSpanID() && s.logIfEmpty(false) {
 		return spans.ROSpan{}
 	}
 
-	s.mu.Lock()
 	if 0 == s.kidSpan { // Creating first sub-span
 		s.kidSpan = s.GetSpanID()    // Want kidSpan to be spanID+spanInc below
 		s.spanInc = 1 | NewSpanID(0) // Must be odd; mutually prime to 2**64
@@ -609,6 +629,7 @@ func (s *Span) NewSubSpan() spans.Factory {
 	}
 	ro := s.ROSpan
 	ro.SetSpanID(s.kidSpan)
+	locked = false
 	s.mu.Unlock()
 
 	kid := newSpan(ro, s.ch)
@@ -840,7 +861,9 @@ func (s *Span) Finish() time.Duration {
 	if nil == s.details.DisplayName {
 		s.SetDisplayName(os.Args[0])
 	}
+	s.mu.Lock() // Prevent a race with NewSubSpan()
 	s.end = time.Now()
+	s.mu.Unlock()
 	s.details.EndTime = TimeAsString(s.end)
 	select {
 	case s.ch <- *s:
