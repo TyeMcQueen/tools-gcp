@@ -1,7 +1,6 @@
 package trace
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -11,13 +10,14 @@ import (
 	"time"
 
 	"github.com/TyeMcQueen/go-lager"
+	"github.com/TyeMcQueen/go-lager/buffer"
 	"github.com/TyeMcQueen/go-lager/gcp-spans"
 	"github.com/TyeMcQueen/go-tutl"
 )
 
 func TestTrace(t *testing.T) {
 	u := tutl.New(t)
-	logs := &bytes.Buffer{}
+	logs := new(buffer.AsyncBuffer)
 	defer u.Is("", logs.Bytes(), "no final errors")
 	defer lager.SetOutput(logs)()
 
@@ -44,9 +44,8 @@ func TestTrace(t *testing.T) {
 		StartServer(&ctx, 1)
 	})
 	u.IsNot(nil, ex, "Start fails w/o proj")
-	u.Like(logs.Bytes(), "Start no proj logs",
+	u.Like(logs.ReadAll(), "Start no proj logs",
 		"[cC]ould not start Registrar")
-	logs.Reset()
 	os.Setenv("GCP_PROJECT_ID", proj)
 
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/no-creds")
@@ -55,9 +54,8 @@ func TestTrace(t *testing.T) {
 		StartServer(&ctx, 1)
 	})
 	u.IsNot(nil, ex, "Start fails w/o creds")
-	u.Like(logs.Bytes(), "Start no creds logs",
+	u.Like(logs.ReadAll(), "Start no creds logs",
 		"[fF]ailed to create CloudTrace client")
-	logs.Reset()
 	os.Unsetenv("GOOGLE_APPLICATION_CREDENTIALS")
 
 	_, err := NewClient(nil, nil)
@@ -80,18 +78,15 @@ func TestTrace(t *testing.T) {
 	u.Is("", empty.GetSpanPath(), "empty GetSpanPath")
 	u.Is("", empty.GetCloudContext(), "empty GetCloudContext")
 	u.Is(-time.Second, empty.GetDuration(), "empty GetDuration")
-	u.Is("", logs.Bytes(), "logs nothing 1")
-	logs.Reset()
+	u.Is("", logs.ReadAll(), "logs nothing 1")
 
 	u.Is(spans.ROSpan{}, empty.NewSubSpan(), "empty NewSubSpan")
-	u.Like(logs.Bytes(), "empty NewSubSpan logs",
+	u.Like(logs.ReadAll(), "empty NewSubSpan logs",
 		"*disallowed method", "*empty span", `"_stack":`)
-	logs.Reset()
 
 	u.Is(time.Duration(0), empty.Finish(), "empty Finish")
-	u.Like(logs.Bytes(), "empty Finish logs",
+	u.Like(logs.ReadAll(), "empty Finish logs",
 		"*disallowed method", "*empty span", `"_stack":`)
-	logs.Reset()
 
 	// Test importing trace from headers
 
@@ -104,8 +99,7 @@ func TestTrace(t *testing.T) {
 	inHead := sp
 	u.Is(sp.GetCloudContext(), fakeHead.Get(spans.TraceHeader),
 		"SetHeader sets "+spans.TraceHeader)
-	u.Is("", logs.Bytes(), "logs nothing 2")
-	logs.Reset()
+	u.Is("", logs.ReadAll(), "logs nothing 2")
 	if u.IsNot(nil, sp, "empty NewSpan") {
 		u.IsNot(0, sp.GetSpanID(), "empty NewTrace not empty")
 	}
@@ -117,17 +111,14 @@ func TestTrace(t *testing.T) {
 	u.Is(true, 0 <= dur, u.S("Finish() duration should not be negative: ", dur))
 	u.Is(os.Args[0], sp.(*Span).details.DisplayName.Value, "name not blank")
 	spanReg.WaitForIdleRunners()
-	u.Is("", logs.Bytes(), "no errors finishing 1")
-	logs.Reset()
+	u.Is("", logs.ReadAll(), "no errors finishing 1")
 
 	u.Is(time.Duration(0), sp.Finish(), "2nd Finish()")
-	u.Like(logs.Bytes(), "2nd Finish logs",
+	u.Like(logs.ReadAll(), "2nd Finish logs",
 		"Disallowed method", "Finish[(][)]ed")
-	logs.Reset()
 
 	u.Is(dur, sp.GetDuration(), "GetDuration after")
-	u.Is("", logs.Bytes(), "GetDuration after logs")
-	logs.Reset()
+	u.Is("", logs.ReadAll(), "GetDuration after logs")
 
 	// Test creating our own trace
 
@@ -169,21 +160,17 @@ func TestTrace(t *testing.T) {
 	}
 
 	// Test AddPairs() failures on valid span:
-	u.Is("", logs.Bytes(), "no errors 3")
-	logs.Reset()
+	u.Is("", logs.ReadAll(), "no errors 3")
 	sub.AddPairs("justkey")
-	u.Like(logs.Bytes(), "justkey logs",
+	u.Like(logs.ReadAll(), "justkey logs",
 		"*ignoring", "*unpaired", "*last arg", "AddPairs[(][)]",
 		`"arg":"justkey"`)
-	logs.Reset()
 	sub.AddPairs(10, "value")
-	u.Like(logs.Bytes(), "non-string key logs",
+	u.Like(logs.ReadAll(), "non-string key logs",
 		"*non-string key", `"key":10,`, `"type":"int",`)
-	logs.Reset()
 	sub.AddPairs("unsup", 1.0)
-	u.Like(logs.Bytes(), "wrong attrib type logs",
+	u.Like(logs.ReadAll(), "wrong attrib type logs",
 		"*invalid value type", "[(]float64[)]", `"key":"unsup"`, `"val":1`)
-	logs.Reset()
 
 	time.Sleep(time.Second / 10)
 	sub.Finish()
@@ -215,8 +202,7 @@ func TestTrace(t *testing.T) {
 		<-readys
 	}
 	spanReg.WaitForIdleRunners()
-	u.Is("", logs.Bytes(), "no errors finishing 2")
-	logs.Reset()
+	u.Is("", logs.ReadAll(), "no errors finishing 2")
 
 	// Test "Push" functions:
 
@@ -248,9 +234,8 @@ func TestTrace(t *testing.T) {
 	req.Header.Set("x-deep-copy", "true")
 	u.Is(true, bg == ctx2, "req failure returns orig context")
 	u.Is(true, bg == req2.Context(), "req failure preserves context")
-	u.Like(logs.Bytes(), "req undecorated logs",
+	u.Like(logs.ReadAll(), "req undecorated logs",
 		"RequestPushSpan[(][)]", "[uU]ndecorated Context", `"_stack":`)
-	logs.Reset()
 
 	req2, ctx2, pushed = RequestPushSpan(req, nil, "req2")
 	u.Is(true, pushed == spans.ContextGetSpan(ctx2), "got pushed req2")
@@ -287,46 +272,40 @@ func TestTrace(t *testing.T) {
 	u.Is("false", req2.Header.Get("x-deep-copy"), "Push3 req not deep copy")
 	req.Header.Set("x-deep-copy", "true")
 
-	u.Is("", logs.Bytes(), "no errors pushing")
-	logs.Reset()
+	u.Is("", logs.ReadAll(), "no errors pushing")
 
 	// Test misc "Push" errors:
 
 	ctx2, span = ContextPushSpan(nil, "n/a")
-	u.Like(logs.Bytes(), "ContextPush nil logs",
+	u.Like(logs.ReadAll(), "ContextPush nil logs",
 		"ContextPushSpan[(][)]", "passed nil Context")
-	logs.Reset()
 	ctx2, span = ContextPushSpan(context.Background(), "n/a")
-	u.Like(logs.Bytes(), "ContextPush undecorated logs",
+	u.Like(logs.ReadAll(), "ContextPush undecorated logs",
 		"ContextPushSpan[(][)]", "passed undecorated Context")
-	logs.Reset()
 
 	req2, ctx2 = nil, bg
 	pushed = PushSpan(&req2, &ctx2, "push4")
 	u.Is(0, pushed.GetSpanID(), "push4 span empty")
 	u.Is(nil, req2, "Push4 req stays nil")
 	u.Is(true, ctx2 == bg, "Push4 ctx unchanged")
-	u.Like(logs.Bytes(), "Push4 logs",
+	u.Like(logs.ReadAll(), "Push4 logs",
 		"PushSpan[(][)]", "passed undecorated Context")
-	logs.Reset()
 
 	req2, ctx2 = nil, nil
 	pushed = PushSpan(&req2, &ctx2, "push5")
 	u.Is(0, pushed.GetSpanID(), "push5 span empty")
 	u.Is(nil, req2, "Push5 req stays nil")
 	u.Is(nil, ctx2, "Push5 ctx stays nil")
-	u.Like(logs.Bytes(), "Push5 logs",
+	u.Like(logs.ReadAll(), "Push5 logs",
 		"PushSpan[(][)]", "passed no Context")
-	logs.Reset()
 
 	spanReg.Halt()
 
 	// Test errors
 
 	u.Is(nil, empty.AddAttribute("key", "value"), "empty AddAttribute")
-	u.Like(logs.Bytes(), "empty AddAttribute logs",
+	u.Like(logs.ReadAll(), "empty AddAttribute logs",
 		"*disallowed method", "*empty span", `"_stack":`)
-	logs.Reset()
 
 	im, err := sp.Import("non-valid", 2)
 	u.Is(nil, im, "invalid Import")
@@ -355,9 +334,8 @@ func TestTrace(t *testing.T) {
 		},
 	} {
 		f()
-		u.Like(logs.Bytes(), "empty "+m+" logs",
+		u.Like(logs.ReadAll(), "empty "+m+" logs",
 			"*disallowed method", "*import()ed span", `"_stack":`)
-		logs.Reset()
 	}
 
 	ev := "TEST_ENV_INT"
@@ -367,22 +345,19 @@ func TestTrace(t *testing.T) {
 
 	ex = u.GetPanic(func(){EnvInteger(2, "")})
 	u.IsNot(nil, ex, "envint blank var exit")
-	u.Like(logs.Bytes(), "envint blank var logs",
+	u.Like(logs.ReadAll(), "envint blank var logs",
 		"EnvInteger[(][)]", "*empty environment variable name", `"_file":`)
-	logs.Reset()
 
 	os.Setenv(ev, "45s")
 	ex = u.GetPanic(func(){EnvInteger(11, ev)})
 	u.IsNot(nil, ex, "envint invalid val exit")
-	u.Like(logs.Bytes(), "envint invalid val logs",
+	u.Like(logs.ReadAll(), "envint invalid val logs",
 		"*invalid integer value", `"EnvVar":"TEST_ENV_INT"`, `\\"45s\\"`)
-	logs.Reset()
 
 	ex = u.GetPanic(func(){
 		req2, ctx2, span = RequestPushSpan(nil, context.Background(), "n/a")
 	})
-	u.Like(logs.Bytes(), "RequestPush nil req logs",
+	u.Like(logs.ReadAll(), "RequestPush nil req logs",
 		"RequestPushSpan[(][)]", "passed nil Request", `"_stack":`)
-	logs.Reset()
 
 }
