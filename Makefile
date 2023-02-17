@@ -69,7 +69,7 @@ MOD := github.com/TyeMcQueen/tools-gcp/
 
 cover: go.mod */*.go results/project.txt
 	GCP_PROJECT_ID=`cat results/project.txt` \
-		go test -v -coverprofile cover ./...
+		go test -race -v -coverprofile cover ./...
 
 cover.html: cover
 	go tool cover -html cover -o cover.html
