@@ -80,6 +80,11 @@ cover.txt: cover.html
 		-e 's:^\([^ ][^ ]*\) [(]\(.*\)[)]:\2 \1:' | col-align - > cover.txt
 	@echo ''
 
+## Update go.sum and vendor/ when go.mod changes
+go.sum: go.mod
+	go mod tidy
+	go mod vendor
+
 .PHONY: test
 ## Run unit tests and report statement coverage percentages
 test: cover.txt
