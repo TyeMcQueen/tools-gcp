@@ -40,7 +40,7 @@ func TestTrace(t *testing.T) {
 
 	os.Unsetenv("GCP_PROJECT_ID")
 	ctx = nil
-	ex := u.GetPanic(func(){
+	ex := u.GetPanic(func() {
 		StartServer(&ctx, 1)
 	})
 	u.IsNot(nil, ex, "Start fails w/o proj")
@@ -50,7 +50,7 @@ func TestTrace(t *testing.T) {
 
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/no-creds")
 	ctx = context.Background()
-	ex = u.GetPanic(func(){
+	ex = u.GetPanic(func() {
 		StartServer(&ctx, 1)
 	})
 	u.IsNot(nil, ex, "Start fails w/o creds")
@@ -329,7 +329,7 @@ func TestTrace(t *testing.T) {
 		"SetStatusCode":    func() { im.SetStatusCode(0) },
 		"SetStatusMessage": func() { im.SetStatusMessage("") },
 		"AddPairs":         func() { im.AddPairs("ok", true) },
-		"AddAttribute":     func() {
+		"AddAttribute": func() {
 			u.Is(nil, im.AddAttribute("ok", true), "empty AddAttrib err")
 		},
 	} {
@@ -343,18 +343,18 @@ func TestTrace(t *testing.T) {
 	os.Setenv(ev, "101")
 	u.Is(101, EnvInteger(11, ev), "envint from env")
 
-	ex = u.GetPanic(func(){EnvInteger(2, "")})
+	ex = u.GetPanic(func() { EnvInteger(2, "") })
 	u.IsNot(nil, ex, "envint blank var exit")
 	u.Like(logs.ReadAll(), "envint blank var logs",
 		"EnvInteger[(][)]", "*empty environment variable name", `"_file":`)
 
 	os.Setenv(ev, "45s")
-	ex = u.GetPanic(func(){EnvInteger(11, ev)})
+	ex = u.GetPanic(func() { EnvInteger(11, ev) })
 	u.IsNot(nil, ex, "envint invalid val exit")
 	u.Like(logs.ReadAll(), "envint invalid val logs",
 		"*invalid integer value", `"EnvVar":"TEST_ENV_INT"`, `\\"45s\\"`)
 
-	ex = u.GetPanic(func(){
+	ex = u.GetPanic(func() {
 		req2, ctx2, span = RequestPushSpan(nil, context.Background(), "n/a")
 	})
 	u.Like(logs.ReadAll(), "RequestPush nil req logs",
