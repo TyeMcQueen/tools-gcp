@@ -40,7 +40,7 @@ type Stringer interface {
 
 // See NewClient().
 type Client struct {
-	ss *ct2.ProjectsTracesSpansService
+	ts *ct2.ProjectsTracesService
 }
 
 // Span tracks a span inside of a trace and can be used to create new child
@@ -146,7 +146,7 @@ func NewClient(ctx context.Context, svc *ct2.Service) (Client, error) {
 			svc = newSvc
 		}
 	}
-	return Client{ss: ct2.NewProjectsTracesSpansService(svc)}, nil
+	return Client{ts: ct2.NewProjectsTracesService(svc)}, nil
 }
 
 // MustNewClient() calls NewClient().  If that fails, then lager.Exit() is
@@ -245,6 +245,21 @@ func (r *Registrar) WaitForIdleRunners() {
 	}
 }
 
+// WaitForRunnerRead() is only meant to be used by tests.  It allows you to
+// ensure that a prior Finish()ed Spans has been read by the only runner.
+//
+func (r *Registrar) WaitForRunnerRead() {
+	if 1 != r.runners {
+		lager.Fail().WithCaller(1).MMap(
+			"WaitForRunnerRead() not allowed with multiple runners",
+			"runners", r.runners)
+	}
+	readys := make(chan Span, 1)
+	empty := Span{ch: readys, spanInc: 1}
+	r.queue <- empty
+	<-readys
+}
+
 func newSpan(roSpan spans.ROSpan, ch chan<- Span) *Span {
 	return &Span{ROSpan: roSpan, ch: ch, mu: new(sync.Mutex)}
 }
@@ -297,46 +312,130 @@ func startRegistrar(
 ) (chan<- Span, <-chan bool, error) {
 	queue := make(chan Span, EnvInteger(1000, "SPAN_QUEUE_CAPACITY"))
 	dones := make(chan bool, runners)
-	prefix := "projects/" + project + "/"
-	maxLag := conn.EnvDuration("SPAN_CREATE_TIMEOUT", "2s")
+	path := "projects/" + project
+	maxSpans := EnvInteger(10000, "SPAN_BATCH_SIZE")
+	maxBatchDur := conn.EnvDuration("SPAN_BATCH_DUR", "2s")
+	maxLag := conn.EnvDuration("SPAN_CREATE_TIMEOUT", "10s")
 	capacity, err := metric.NewCapacityUsage(
 		float64(cap(queue)), "span-queue", os.Getenv("LAGER_SPAN_PREFIX"), "1m")
 	if nil != err {
 		lager.Exit().MMap("Can't monitor span queue capacity", "error", err)
 	}
 	for ; 0 < runners; runners-- {
-		go func() {
-			for sp := range queue {
-				capacity.Record(float64(len(queue)))
-				// Sending an empty Span is used by tests to
-				// wait for the previous CreateSpan() call(s) to finish:
-				if 0 == sp.GetSpanID() {
-					if sp.ch != queue {
-						sp.ch <- sp
-					}
-					continue
-				}
-				ctx := context.Background()
-				can := conn.Timeout(&ctx, maxLag)
-				start := time.Now()
-				_, err := client.ss.CreateSpan(
-					prefix+sp.GetSpanPath(), sp.details,
-				).Context(ctx).Do()
-				if nil == err {
-					spanCreated(start, "ok")
-				} else if nil != ctx.Err() {
-					spanCreated(start, "timeout")
-				} else {
-					spanCreated(start, "fail")
-					lager.Fail().MMap("Failed to create span",
-						"err", err, "span", sp.details)
-				}
-				can()
-			}
-			dones <- true
-		}()
+		go writeSpans(
+			client, queue, dones, path, maxSpans, maxBatchDur, maxLag, capacity)
 	}
 	return queue, dones, nil
+}
+
+func writeSpans(
+	client Client,
+	queue chan Span,
+	dones chan<- bool,
+	path string,
+	maxSpans int,
+	maxBatchDur, maxLag time.Duration,
+	capacity *metric.CapacityUsage,
+) {
+	batch := ct2.BatchWriteSpansRequest{
+		Spans: make([]*ct2.Span, 0, maxSpans),
+	}
+	var timer *time.Timer
+	var timeout <-chan time.Time // nil unless the timer is active
+
+	for {
+		// If no active timer and have spans to write:
+		if nil == timeout && 0 < len(batch.Spans) {
+			// Set timeout after maxBatchDur * random[1.0,1.5):
+			dur := time.Duration(
+				(1.0 + mrand.Float64()/2.0) * float64(maxBatchDur))
+			if nil == timer {
+				timer = time.NewTimer(dur)
+			} else {
+				timer.Reset(dur)
+			}
+			timeout = timer.C
+			lager.Trace().MMap("Reset span writer timeout")
+		}
+		full := false       // Whether to write the batch now
+		var replySpan *Span // Used by WaitForIdleRunners()
+
+		// Read more spans to write:
+		select {
+		case sp, ok := <-queue:
+			if !ok {
+				dones <- true
+				return
+			}
+			capacity.Record(float64(len(queue)))
+			// Sending an empty Span is used by tests to
+			// wait for the previous CreateSpan() call(s) to finish:
+			if 0 == sp.GetSpanID() {
+				lager.Trace().MMap("Flush span batch")
+				full = true
+				if nil != sp.ch && sp.ch != queue {
+					replySpan = &sp
+				}
+			} else {
+				lager.Trace().MMap("Add span to batch",
+					"span", sp.details.DisplayName.Value)
+				sp.details.Name = path + "/" + sp.GetSpanPath()
+				batch.Spans = append(batch.Spans, sp.details)
+			}
+
+		case <-timeout:
+			lager.Trace().MMap("Span batch timed out")
+			timeout = nil // Timer no longer active
+			if 0 == len(batch.Spans) {
+				lager.Trace().MMap("Span batch empty after timeout?!")
+				continue
+			}
+			full = true
+		}
+
+		if !full && len(batch.Spans) < maxSpans {
+			lager.Trace().MMap("Span batch waiting for more spans")
+			continue
+		}
+
+		if 0 == len(batch.Spans) {
+			lager.Trace().MMap("No spans to write")
+		} else {
+			if nil != timeout { // Stop the timer
+				if !timer.Stop() {
+					lager.Trace().MMap("Draining unread span timeout")
+					<-timeout
+				}
+				timeout = nil
+			}
+			lager.Trace().MMap("Writing batch of spans",
+				"count", len(batch.Spans))
+
+			// Write the batch of spans now:
+			ctx := context.Background()
+			can := conn.Timeout(&ctx, maxLag)
+			start := time.Now()
+			_, err := client.ts.BatchWrite(
+				path, &batch,
+			).Context(ctx).Do()
+			if nil == err {
+				spanCreated(start, "ok")
+			} else if nil != ctx.Err() {
+				spanCreated(start, "timeout")
+			} else {
+				spanCreated(start, "fail")
+				lager.Fail().MMap("Failed to create span batch",
+					"err", err, "spans", len(batch.Spans))
+			}
+			batch.Spans = batch.Spans[0:0]
+			can()
+		}
+
+		if nil != replySpan {
+			replySpan.ch <- *replySpan
+			replySpan = nil
+		}
+	}
 }
 
 // ContextPushSpan() takes a Context which should already be decorated with a
