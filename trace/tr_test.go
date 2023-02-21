@@ -33,6 +33,10 @@ func TestTrace(t *testing.T) {
 		t.SkipNow()
 		return
 	}
+	os.Setenv("SPAN_QUEUE_CAPACITY", "3")
+	os.Setenv("SPAN_BATCH_SIZE", "2")
+	os.Setenv("SPAN_BATCH_DUR", "0.2s")
+	os.Setenv("SPAN_CREATE_TIMEOUT", "1s")
 
 	var ctx context.Context
 
@@ -63,7 +67,6 @@ func TestTrace(t *testing.T) {
 
 	ctx = context.Background()
 	var spanReg *Registrar
-	os.Setenv("SPAN_QUEUE_CAPACITY", "2")
 	defer StartServer(&ctx, 1, &spanReg)()
 	empty := spans.ContextGetSpan(ctx)
 	u.IsNot(nil, empty, "NewFactory")
@@ -110,8 +113,6 @@ func TestTrace(t *testing.T) {
 	dur := sp.Finish()
 	u.Is(true, 0 <= dur, u.S("Finish() duration should not be negative: ", dur))
 	u.Is(os.Args[0], sp.(*Span).details.DisplayName.Value, "name not blank")
-	spanReg.WaitForIdleRunners()
-	u.Is("", logs.ReadAll(), "no errors finishing 1")
 
 	u.Is(time.Duration(0), sp.Finish(), "2nd Finish()")
 	u.Like(logs.ReadAll(), "2nd Finish logs",
@@ -126,7 +127,7 @@ func TestTrace(t *testing.T) {
 	if u.IsNot(nil, sp, "NewTrace") {
 		u.IsNot(0, sp.GetSpanID(), "NewTrace not empty")
 	}
-	time.Sleep(time.Second / 10)
+	time.Sleep(time.Second / 20)
 
 	sub := sp.NewSpan()
 	u.Is(sp.GetTraceID(), sub.GetTraceID(), "NewSpan() preserves trace")
@@ -172,11 +173,11 @@ func TestTrace(t *testing.T) {
 	u.Like(logs.ReadAll(), "wrong attrib type logs",
 		"*invalid value type", "[(]float64[)]", `"key":"unsup"`, `"val":1`)
 
-	time.Sleep(time.Second / 10)
+	time.Sleep(time.Second / 20)
 	sub.Finish()
 	u.Is("fetch user", sub.(*Span).details.DisplayName.Value, "name kept")
 
-	time.Sleep(time.Second / 10)
+	time.Sleep(time.Second / 20)
 	sp.SetIsServer()
 	sp.SetStatusMessage("Rejected")
 	sp.AddAttribute("req_bytes", int64(-1))
@@ -185,24 +186,57 @@ func TestTrace(t *testing.T) {
 		"AddAttribute", "*invalid value type", "*(float64)")
 	u.Log("trace ID: ", sp.GetTraceID())
 
+	sp.Finish()
+
 	// Finish when queue full
 	{
+		dropped := sp.NewSubSpan().SetDisplayName("dropped")
 		readys := make(chan Span, 0)
-		empty := Span{ch: readys}
+		pauser := Span{ch: readys}
 		for i := spanReg.runners; 0 < i; i-- {
-			spanReg.queue <- empty
+			spanReg.queue <- pauser // Make each runner pause
 		}
-		spanReg.queue <- empty
-		spanReg.queue <- empty
-		sp.Finish()
+		spanReg.queue <- Span{spanInc: 1}
+		spanReg.queue <- Span{spanInc: 1} // Fill the inbound queue channel
+		dropped.Finish()                  // Send a real span while queue full
 		for i := spanReg.runners; 0 < i; i-- {
-			<-readys
+			<-readys // Unblock each runner
 		}
-		<-readys
-		<-readys
 	}
+
 	spanReg.WaitForIdleRunners()
-	u.Is("", logs.ReadAll(), "no errors finishing 2")
+	u.Is("", logs.ReadAll(), "no errors finishing 1..4")
+
+	// Test batch span writing timeout:
+
+	lager.Init("FWNAIT") // Enable trace logging
+	sp.NewSubSpan().SetDisplayName("one").Finish()
+	spanReg.WaitForRunnerRead()
+	u.Like(logs.ReadAll(), "finish one",
+		`^[^\n]*Add span to batch[^\n]*"span":"one"[^\n]*\n`+
+			`[^\n]*Span batch waiting for more spans[^\n]*\n`+
+			`[^\n]*Reset span writer timeout[^\n]*\n$`)
+
+	sp.NewSubSpan().SetDisplayName("two").Finish()
+	spanReg.WaitForRunnerRead()
+	u.Like(logs.ReadAll(), "finish two",
+		`^[^\n]*Add span to batch[^\n]*"span":"two"[^\n]*\n`+
+			`[^\n]*Writing batch of spans[^\n]*\n$`)
+	time.Sleep(time.Second) // Allow time for spans to be posted.
+
+	sp.NewSubSpan().SetDisplayName("three").Finish()
+	spanReg.WaitForRunnerRead()
+	u.Like(logs.ReadAll(), "finish three",
+		`^[^\n]*Add span to batch[^\n]*"span":"three"[^\n]*\n`+
+			`[^\n]*Span batch waiting for more spans[^\n]*\n`+
+			`[^\n]*Reset span writer timeout[^\n]*\n$`)
+
+	time.Sleep(time.Second / 2)
+	u.Like(logs.ReadAll(), "pause after finish",
+		`^[^\n]*Span batch timed out[^\n]*\n`+
+			`[^\n]*Writing batch of spans[^\n]*\n$`)
+
+	lager.Init(os.Getenv("LAGER_LEVELS"))
 
 	// Test "Push" functions:
 

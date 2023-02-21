@@ -314,7 +314,7 @@ func startRegistrar(
 	dones := make(chan bool, runners)
 	path := "projects/" + project
 	maxSpans := EnvInteger(10000, "SPAN_BATCH_SIZE")
-	maxBatchDur := conn.EnvDuration("SPAN_BATCH_DUR", "2s")
+	maxBatchDur := conn.EnvDuration("SPAN_BATCH_DUR", "5s")
 	maxLag := conn.EnvDuration("SPAN_CREATE_TIMEOUT", "10s")
 	capacity, err := metric.NewCapacityUsage(
 		float64(cap(queue)), "span-queue", os.Getenv("LAGER_SPAN_PREFIX"), "1m")
@@ -371,11 +371,15 @@ func writeSpans(
 			// Sending an empty Span is used by tests to
 			// wait for the previous CreateSpan() call(s) to finish:
 			if 0 == sp.GetSpanID() {
-				lager.Trace().MMap("Flush span batch")
-				full = true
 				if nil != sp.ch && sp.ch != queue {
+					if 1 == sp.spanInc { // WaitForRunnerRead() called:
+						sp.ch <- sp
+						continue
+					} // Else WaitForIdleRunners() called:
 					replySpan = &sp
 				}
+				lager.Trace().MMap("Flush span batch")
+				full = true
 			} else {
 				lager.Trace().MMap("Add span to batch",
 					"span", sp.details.DisplayName.Value)
