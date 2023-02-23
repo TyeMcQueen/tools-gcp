@@ -624,7 +624,7 @@ func (s *Span) NewSubSpan() spans.Factory {
 	if 0 == s.kidSpan { // Eventually we can rotate to 0...
 		s.kidSpan += s.spanInc // ...so rotate one more time.
 	}
-	if nil != s.details {
+	if nil != s.details && s.end.IsZero() {
 		s.details.ChildSpanCount++
 	}
 	ro := s.ROSpan
