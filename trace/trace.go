@@ -255,6 +255,8 @@ func (r *Registrar) WaitForRunnerRead() {
 	<-readys
 }
 
+// newSpan() initializes and returns a new *Span.
+//
 func newSpan(roSpan spans.ROSpan, ch chan<- Span) *Span {
 	return &Span{ROSpan: roSpan, ch: ch, mu: new(sync.Mutex)}
 }
@@ -285,6 +287,9 @@ func (r *Registrar) Halt() {
 	}
 }
 
+// EnvInteger() gets a configuration 'int' value from the specified
+// environment variable, returning the 'tacit' value if not set.
+//
 func EnvInteger(tacit int, envvar string) int {
 	if "" == envvar {
 		lager.Exit().WithCaller(1).List(
@@ -365,7 +370,7 @@ func writeSpans(
 			}
 			capacity.Record(float64(len(queue)))
 			// Sending an empty Span is used by tests to
-			// wait for the previous CreateSpan() call(s) to finish:
+			// wait for the previous work to finish:
 			if 0 == sp.GetSpanID() {
 				if nil != sp.ch && sp.ch != queue {
 					if 1 == sp.spanInc { // WaitForRunnerRead() called:
@@ -415,9 +420,7 @@ func writeSpans(
 			ctx := context.Background()
 			can := conn.Timeout(&ctx, maxLag)
 			start := time.Now()
-			_, err := client.ts.BatchWrite(
-				path, &batch,
-			).Context(ctx).Do()
+			_, err := client.ts.BatchWrite(path, &batch).Context(ctx).Do()
 			if nil == err {
 				spanCreated(start, "ok")
 			} else if nil != ctx.Err() {
