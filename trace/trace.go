@@ -165,7 +165,7 @@ func MustNewClient(ctx context.Context, svc *ct2.Service) Client {
 // enable GCP-based tracing, usually called like:
 //
 //      ctx := context.Background()
-//      defer trace.StartServer(&ctx, 1)()
+//      defer trace.StartServer(&ctx)()
 //      // Have 'ctx' returned by the http.Server.BaseContext func.
 //
 // This assumes that the calling function will not exit until the server
@@ -176,12 +176,12 @@ func MustNewClient(ctx context.Context, svc *ct2.Service) Client {
 // useful when testing).
 //
 func StartServer(
-	pCtx *context.Context, runners int, pRegs ...**Registrar,
+	pCtx *context.Context, pRegs ...**Registrar,
 ) func() {
 	if nil == *pCtx {
 		*pCtx = context.Background()
 	}
-	spanReg := MustNewRegistrar("", MustNewClient(*pCtx, nil), runners)
+	spanReg := MustNewRegistrar("", MustNewClient(*pCtx, nil))
 	*pCtx = spans.ContextStoreSpan(*pCtx, spanReg.NewFactory())
 	for _, p := range pRegs {
 		if nil != p {
@@ -191,13 +191,10 @@ func StartServer(
 	return func() { spanReg.Halt() }
 }
 
-// NewRegistrar() starts a number of go-routines (given by 'runners') that
-// wait to receive Finish()ed Spans and then register them with GCP Cloud
-// Trace.
+// NewRegistrar() starts a number of go-routines that wait to receive
+// Finish()ed Spans and then register them with GCP Cloud Trace.
 //
-func NewRegistrar(
-	project string, client Client, runners int,
-) (*Registrar, error) {
+func NewRegistrar(project string, client Client) (*Registrar, error) {
 	if "" == project {
 		if dflt, err := lager.GcpProjectID(nil); nil != err {
 			return nil, err
@@ -205,7 +202,7 @@ func NewRegistrar(
 			project = dflt
 		}
 	}
-	queue, dones, err := startRegistrar(project, client, runners)
+	runners, queue, dones, err := startRegistrar(project, client)
 	if nil != err {
 		return nil, err
 	}
@@ -215,10 +212,8 @@ func NewRegistrar(
 // MustNewRegistrar() calls NewRegistrar() and, if that fails, uses
 // lager.Exit() to abort the process.
 //
-func MustNewRegistrar(
-	project string, client Client, runners int,
-) *Registrar {
-	reg, err := NewRegistrar(project, client, runners)
+func MustNewRegistrar(project string, client Client) *Registrar {
+	reg, err := NewRegistrar(project, client)
 	if nil != err {
 		lager.Exit().MMap("Could not start Registrar for CloudTrace spans",
 			"err", err)
@@ -308,8 +303,9 @@ func EnvInteger(tacit int, envvar string) int {
 }
 
 func startRegistrar(
-	project string, client Client, runners int,
-) (chan<- Span, <-chan bool, error) {
+	project string, client Client,
+) (int, chan<- Span, <-chan bool, error) {
+	runners := EnvInteger(2, "SPAN_RUNNERS")
 	queue := make(chan Span, EnvInteger(1000, "SPAN_QUEUE_CAPACITY"))
 	dones := make(chan bool, runners)
 	path := "projects/" + project
@@ -321,11 +317,11 @@ func startRegistrar(
 	if nil != err {
 		lager.Exit().MMap("Can't monitor span queue capacity", "error", err)
 	}
-	for ; 0 < runners; runners-- {
+	for r := runners; 0 < r; r-- {
 		go writeSpans(
 			client, queue, dones, path, maxSpans, maxBatchDur, maxLag, capacity)
 	}
-	return queue, dones, nil
+	return runners, queue, dones, nil
 }
 
 func writeSpans(

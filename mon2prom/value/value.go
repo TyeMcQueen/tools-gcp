@@ -112,7 +112,7 @@ var prevEpoch = int64(0)
 // Converts a timestamp string into Unix epoch seconds.
 func StampEpoch(stamp string) int64 {
 	if "" == stamp {
-		lager.Warn().WithStack(0, 0, 3).List("Empty epoch")
+		lager.Warn().WithStack(0, 0).List("Empty epoch")
 		return 0
 	}
 	epochLock.RLock()

@@ -33,6 +33,7 @@ func TestTrace(t *testing.T) {
 		t.SkipNow()
 		return
 	}
+	os.Setenv("SPAN_RUNNERS", "1")
 	os.Setenv("SPAN_QUEUE_CAPACITY", "3")
 	os.Setenv("SPAN_BATCH_SIZE", "2")
 	os.Setenv("SPAN_BATCH_DUR", "0.2s")
@@ -45,7 +46,7 @@ func TestTrace(t *testing.T) {
 	os.Unsetenv("GCP_PROJECT_ID")
 	ctx = nil
 	ex := u.GetPanic(func() {
-		StartServer(&ctx, 1)
+		StartServer(&ctx)
 	})
 	u.IsNot(nil, ex, "Start fails w/o proj")
 	u.Like(logs.ReadAll(), "Start no proj logs",
@@ -55,7 +56,7 @@ func TestTrace(t *testing.T) {
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/no-creds")
 	ctx = context.Background()
 	ex = u.GetPanic(func() {
-		StartServer(&ctx, 1)
+		StartServer(&ctx)
 	})
 	u.IsNot(nil, ex, "Start fails w/o creds")
 	u.Like(logs.ReadAll(), "Start no creds logs",
@@ -67,7 +68,7 @@ func TestTrace(t *testing.T) {
 
 	ctx = context.Background()
 	var spanReg *Registrar
-	defer StartServer(&ctx, 1, &spanReg)()
+	defer StartServer(&ctx, &spanReg)()
 	empty := spans.ContextGetSpan(ctx)
 	u.IsNot(nil, empty, "NewFactory")
 
